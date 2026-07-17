@@ -1,0 +1,32 @@
+{
+  "name": "talentai-backend",
+  "version": "1.0.0",
+  "description": "TalentAI Backend Server",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "server": "nodemon --exec tsx src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.22.2",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.6.0",
+    "helmet": "^8.3.0",
+    "jose": "^6.2.3",
+    "mongodb": "^7.5.0"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.25",
+    "@types/node": "^22.13.0",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.23.1",
+    "typescript": "^5.7.0"
+  }
+}
