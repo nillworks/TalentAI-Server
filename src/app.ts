@@ -39,7 +39,7 @@ export function createApp(db: Db) {
     res.json({ success: true, message: 'TalentAI backend is running' });
   });
 
-  const userCollection = db.collection('users');
+  const userCollection = db.collection('user');
   const jobCollection = db.collection('jobs');
   const applicationCollection = db.collection('applications');
   const savedJobCollection = db.collection('savedJobs');

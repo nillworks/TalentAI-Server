@@ -9,7 +9,7 @@ export function createUserRoutes(
 ) {
   const router = Router();
 
-  router.get('/', verifyToken, async (req: AuthRequest, res: Response) => {
+  router.get('/',  async (req: AuthRequest, res: Response) => {
     try {
       const {
         page = '1',
