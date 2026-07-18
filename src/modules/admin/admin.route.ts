@@ -228,7 +228,7 @@ export function createAdminRoutes(
   router.post('/blog', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user?.sub;
-      const { title, content, tags, authorImage } = req.body;
+      const { title, content, tags, authorImage, authorRole } = req.body;
 
       if (!title || !content) return sendError(res, 'title and content are required', 400);
 
@@ -238,6 +238,7 @@ export function createAdminRoutes(
         authorId: userId,
         authorName: req.user?.name || '',
         authorImage: authorImage || '',
+        authorRole: authorRole || req.user?.role || 'admin',
         tags: tags || [],
         createdAt: new Date(),
       };
@@ -251,7 +252,20 @@ export function createAdminRoutes(
 
   router.get('/blog', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
     try {
-      const blogs = await blogCollection.find().sort({ createdAt: -1 }).toArray();
+      const { authorRole, search } = req.query as Record<string, string>;
+
+      const query: Record<string, any> = {};
+      if (authorRole && authorRole !== 'all') {
+        query.authorRole = authorRole;
+      }
+      if (search) {
+        query.$or = [
+          { title: { $regex: new RegExp(search, 'i') } },
+          { authorName: { $regex: new RegExp(search, 'i') } },
+        ];
+      }
+
+      const blogs = await blogCollection.find(query).sort({ createdAt: -1 }).toArray();
       sendSuccess(res, blogs);
     } catch {
       sendError(res, 'Failed to fetch blogs');
