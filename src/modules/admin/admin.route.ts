@@ -228,7 +228,7 @@ export function createAdminRoutes(
   router.post('/blog', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user?.sub;
-      const { title, content, tags } = req.body;
+      const { title, content, tags, authorImage } = req.body;
 
       if (!title || !content) return sendError(res, 'title and content are required', 400);
 
@@ -237,6 +237,7 @@ export function createAdminRoutes(
         content,
         authorId: userId,
         authorName: req.user?.name || '',
+        authorImage: authorImage || '',
         tags: tags || [],
         createdAt: new Date(),
       };

@@ -74,6 +74,7 @@ export interface BlogDocument {
   content: string;
   authorId: string;
   authorName: string;
+  authorImage?: string;
   tags: string[];
   createdAt: Date;
   updatedAt?: Date;
