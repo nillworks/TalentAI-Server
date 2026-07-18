@@ -15,6 +15,7 @@ import { createAdminRoutes } from './modules/admin/admin.route';
 import { createBlogRoutes } from './modules/blog/blog.route';
 import { createAIRoutes } from './modules/ai/ai.route';
 import { Db } from 'mongodb';
+import { setUserCollection } from './middlewares/auth.middleware';
 
 export function createApp(db: Db) {
   const app = express();
@@ -40,6 +41,7 @@ export function createApp(db: Db) {
   });
 
   const userCollection = db.collection('user');
+  setUserCollection(userCollection);
   const jobCollection = db.collection('jobs');
   const applicationCollection = db.collection('applications');
   const savedJobCollection = db.collection('savedJobs');

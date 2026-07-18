@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { AuthRequest } from '../types/express.d';
 import { sendError } from '../utils/response';
+import { ObjectId, Collection, Document } from 'mongodb';
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
@@ -12,6 +13,12 @@ const getJWKS = () => {
     );
   }
   return jwks;
+};
+
+let userCollectionRef: Collection<Document> | null = null;
+
+export const setUserCollection = (collection: Collection<Document>) => {
+  userCollectionRef = collection;
 };
 
 export const verifyToken = async (
@@ -34,6 +41,14 @@ export const verifyToken = async (
   try {
     const { payload } = await jwtVerify(token, getJWKS());
     req.user = payload as unknown as AuthRequest['user'];
+
+    if (userCollectionRef && req.user?.sub) {
+      const user = await userCollectionRef.findOne({ _id: new ObjectId(req.user.sub) });
+      if (user?.isBlocked) {
+        return sendError(res, 'Account blocked. Contact admin.', 403);
+      }
+    }
+
     next();
   } catch {
     return sendError(res, 'Unauthorized', 401);
