@@ -14,14 +14,23 @@ export interface AuthRequest extends Request {
 export interface JobDocument {
   _id?: any;
   title: string;
-  company: string;
+  companyName: string;
+  companyLogo?: string;
+  category: string;
+  jobType: string;
   location: string;
-  type: string;
-  salary?: string;
-  description: string;
+  salaryMin: number;
+  salaryMax: number;
+  deadline?: string;
+  shortDescription: string;
+  fullDescription: string;
   requirements: string[];
-  benefits: string[];
+  benefits?: string[];
   postedBy: string;
+  recruiterId?: string;
+  recruiterName?: string;
+  recruiterImage?: string;
+  recruiterEmail?: string;
   status: 'pending' | 'approved' | 'rejected';
   applicationCount: number;
   createdAt: Date;
@@ -64,6 +73,50 @@ export interface RecruiterRequestDocument {
   email: string;
   company: string;
   status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface SeekerProfileDocument {
+  _id?: any;
+  userId: string;
+  phone?: string;
+  bio?: string;
+  location?: string;
+  resumeUrl?: string;
+  linkedinUrl?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  skills?: string[];
+  education?: {
+    institution: string;
+    degree: string;
+    field: string;
+    startDate?: string;
+    endDate?: string;
+  }[];
+  experience?: {
+    company: string;
+    position: string;
+    startDate?: string;
+    endDate?: string;
+    description?: string;
+  }[];
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface RecruiterProfileDocument {
+  _id?: any;
+  userId: string;
+  companyName: string;
+  companyLogo?: string;
+  companyWebsite?: string;
+  companyDescription?: string;
+  companyLocation?: string;
+  industry?: string;
+  companySize?: string;
+  phone?: string;
   createdAt: Date;
   updatedAt?: Date;
 }

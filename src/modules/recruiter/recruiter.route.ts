@@ -55,13 +55,41 @@ export function createRecruiterRoutes(
       const userId = req.user?.sub;
       if (!userId) return sendError(res, 'Unauthorized', 401);
 
-      const jobData = req.body;
-      jobData.postedBy = userId;
-      jobData.status = 'pending';
-      jobData.applicationCount = 0;
-      jobData.createdAt = new Date();
+      const {
+        title, companyName, companyLogo, category, jobType, location,
+        salaryMin, salaryMax, deadline, shortDescription, fullDescription,
+        requirements, benefits, recruiterId, recruiterName, recruiterImage, recruiterEmail,
+      } = req.body;
 
-      const result = await jobCollection.insertOne(jobData);
+      if (!title || !companyName || !category || !jobType || !location) {
+        return sendError(res, 'Missing required fields', 400);
+      }
+
+      const job = {
+        title,
+        companyName,
+        companyLogo: companyLogo || '',
+        category,
+        jobType,
+        location,
+        salaryMin: Number(salaryMin) || 0,
+        salaryMax: Number(salaryMax) || 0,
+        deadline: deadline || '',
+        shortDescription: shortDescription || '',
+        fullDescription: fullDescription || '',
+        requirements: requirements || [],
+        benefits: benefits || [],
+        postedBy: userId,
+        recruiterId: recruiterId || userId,
+        recruiterName: recruiterName || req.user?.name || '',
+        recruiterImage: recruiterImage || '',
+        recruiterEmail: recruiterEmail || req.user?.email || '',
+        status: 'pending' as const,
+        applicationCount: 0,
+        createdAt: new Date(),
+      };
+
+      const result = await jobCollection.insertOne(job);
       sendSuccess(res, result, 201);
     } catch {
       sendError(res, 'Failed to create job');

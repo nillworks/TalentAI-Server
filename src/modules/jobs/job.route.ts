@@ -17,6 +17,7 @@ export function createJobRoutes(
         limit = '10',
         search,
         type,
+        category,
         location,
         sortBy,
       } = req.query as Record<string, string>;
@@ -29,12 +30,16 @@ export function createJobRoutes(
       if (search) {
         query.$or = [
           { title: { $regex: new RegExp(search, 'i') } },
-          { company: { $regex: new RegExp(search, 'i') } },
+          { companyName: { $regex: new RegExp(search, 'i') } },
         ];
       }
 
       if (type && type !== 'All') {
-        query.type = { $regex: new RegExp(`^${type}$`, 'i') };
+        query.jobType = { $regex: new RegExp(`^${type}$`, 'i') };
+      }
+
+      if (category && category !== 'All') {
+        query.category = { $regex: new RegExp(`^${category}$`, 'i') };
       }
 
       if (location && location !== 'All') {
@@ -44,6 +49,7 @@ export function createJobRoutes(
       const sortOptions: Record<string, any> = { createdAt: -1 };
       if (sortBy === 'oldest') sortOptions.createdAt = 1;
       if (sortBy === 'applications') sortOptions.applicationCount = -1;
+      if (sortBy === 'salary_high') sortOptions.salaryMax = -1;
 
       const skip = (pageNum - 1) * limitNum;
 
