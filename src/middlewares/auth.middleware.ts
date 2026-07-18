@@ -47,6 +47,9 @@ export const verifyToken = async (
       if (user?.isBlocked) {
         return sendError(res, 'Account blocked. Contact admin.', 403);
       }
+      if (user?.role) {
+        (req.user as any).role = user.role;
+      }
     }
 
     next();
