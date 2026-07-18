@@ -171,8 +171,23 @@ export function createAdminRoutes(
 
   router.get('/recruiter-requests', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
     try {
+      const { status, search } = req.query as Record<string, string>;
+      const query: Record<string, any> = {};
+
+      if (status && status !== 'all') {
+        query.status = status;
+      }
+
+      if (search) {
+        query.$or = [
+          { name: { $regex: new RegExp(search, 'i') } },
+          { email: { $regex: new RegExp(search, 'i') } },
+          { company: { $regex: new RegExp(search, 'i') } },
+        ];
+      }
+
       const requests = await recruiterRequestCollection
-        .find({ status: 'pending' })
+        .find(query)
         .sort({ createdAt: -1 })
         .toArray();
 
@@ -211,14 +226,24 @@ export function createAdminRoutes(
   router.patch('/recruiter-requests/:id/reject', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
     try {
       const id = String(req.params.id);
+      const { rejectionReason } = req.body;
       if (!ObjectId.isValid(id)) return sendError(res, 'Invalid request ID', 400);
 
       const result = await recruiterRequestCollection.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { status: 'rejected', updatedAt: new Date() } },
+        { $set: { status: 'rejected', rejectionReason: rejectionReason || '', updatedAt: new Date() } },
       );
 
       if (result.matchedCount === 0) return sendError(res, 'Request not found', 404);
+
+      const request = await recruiterRequestCollection.findOne({ _id: new ObjectId(id) });
+      if (request) {
+        await userCollection.updateOne(
+          { userId: request.userId },
+          { $set: { role: 'seeker' } },
+        );
+      }
+
       sendSuccess(res, { message: 'Recruiter rejected' });
     } catch {
       sendError(res, 'Failed to reject recruiter');

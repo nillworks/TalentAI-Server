@@ -72,6 +72,8 @@ export interface RecruiterRequestDocument {
   name: string;
   email: string;
   company: string;
+  userImage?: string;
+  rejectionReason?: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: Date;
   updatedAt?: Date;

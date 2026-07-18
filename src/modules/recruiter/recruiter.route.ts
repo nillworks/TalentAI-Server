@@ -17,7 +17,7 @@ export function createRecruiterRoutes(
       const email = req.user?.email;
       if (!userId) return sendError(res, 'Unauthorized', 401);
 
-      const { name, company } = req.body;
+      const { name, company, userImage } = req.body;
       if (!company) return sendError(res, 'company is required', 400);
 
       const existing = await recruiterRequestCollection.findOne({ userId });
@@ -28,6 +28,7 @@ export function createRecruiterRoutes(
         name: name || '',
         email: email || '',
         company,
+        userImage: userImage || '',
         status: 'pending',
         createdAt: new Date(),
       });
@@ -44,7 +45,7 @@ export function createRecruiterRoutes(
       if (!userId) return sendError(res, 'Unauthorized', 401);
 
       const request = await recruiterRequestCollection.findOne({ userId });
-      sendSuccess(res, { status: request?.status || 'none' });
+      sendSuccess(res, { status: request?.status || 'none', rejectionReason: request?.rejectionReason || '' });
     } catch {
       sendError(res, 'Failed to check status');
     }
