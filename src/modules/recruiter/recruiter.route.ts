@@ -8,6 +8,7 @@ export function createRecruiterRoutes(
   jobCollection: Collection<Document>,
   applicationCollection: Collection<Document>,
   recruiterRequestCollection: Collection<Document>,
+  userCollection: Collection<Document>,
 ) {
   const router = Router();
 
@@ -200,7 +201,20 @@ export function createRecruiterRoutes(
         .sort({ createdAt: -1 })
         .toArray();
 
-      sendSuccess(res, applicants);
+      const applicantsWithUser = await Promise.all(
+        applicants.map(async (app) => {
+          let user = null;
+          if (app.userId && ObjectId.isValid(app.userId)) {
+            user = await userCollection.findOne(
+              { _id: new ObjectId(app.userId) },
+              { projection: { name: 1, email: 1, image: 1 } },
+            );
+          }
+          return { ...app, user };
+        }),
+      );
+
+      sendSuccess(res, applicantsWithUser);
     } catch {
       sendError(res, 'Failed to fetch applicants');
     }
@@ -209,7 +223,7 @@ export function createRecruiterRoutes(
   router.patch('/applications/:appId/status', verifyToken, requireRole('recruiter', 'admin'), async (req: AuthRequest, res: Response) => {
     try {
       const appId = String(req.params.appId);
-      const { status } = req.body;
+      const { status, feedback } = req.body;
 
       if (!ObjectId.isValid(appId)) {
         return sendError(res, 'Invalid application ID', 400);
@@ -219,9 +233,21 @@ export function createRecruiterRoutes(
         return sendError(res, 'Invalid status', 400);
       }
 
+      if (status === 'rejected' && (!feedback || !feedback.trim())) {
+        return sendError(res, 'Feedback is required when rejecting', 400);
+      }
+
+      const updateData: Record<string, unknown> = {
+        status,
+        updatedAt: new Date(),
+      };
+      if (feedback && feedback.trim()) {
+        updateData.feedback = feedback.trim();
+      }
+
       const result = await applicationCollection.updateOne(
         { _id: new ObjectId(appId) },
-        { $set: { status, updatedAt: new Date() } },
+        { $set: updateData },
       );
 
       if (result.matchedCount === 0) {
