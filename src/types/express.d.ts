@@ -1,8 +1,16 @@
 import { Request } from 'express';
 
+export type PlanType = 'free_seeker' | 'pro_seeker' | 'recruiter_free' | 'pro_recruiter';
+
+export interface PlanLimits {
+  maxApplications?: number;
+  maxJobPosts?: number;
+}
+
 export interface AuthUser {
   sub: string;
   role: 'admin' | 'recruiter' | 'seeker';
+  plan?: PlanType;
   email?: string;
   name?: string;
 }
@@ -61,6 +69,9 @@ export interface UserDocument {
   name: string;
   email: string;
   role: 'seeker' | 'recruiter' | 'admin';
+  plan: PlanType;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
   isBlocked: boolean;
   createdAt: Date;
   updatedAt?: Date;

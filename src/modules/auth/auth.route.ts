@@ -27,6 +27,7 @@ export function createAuthRoutes(
         name: name || '',
         email,
         role: role || 'seeker',
+        plan: 'free_seeker',
         isBlocked: false,
         createdAt: new Date(),
       };

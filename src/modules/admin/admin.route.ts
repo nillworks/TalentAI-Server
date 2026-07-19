@@ -3,6 +3,7 @@ import { ObjectId, Collection, Document } from 'mongodb';
 import { AuthRequest } from '../../types/express.d';
 import { verifyToken, requireRole } from '../../middlewares/auth.middleware';
 import { sendSuccess, sendError, sendPaginated } from '../../utils/response';
+import { PLANS } from '../payments/planConfig';
 
 export function createAdminRoutes(
   userCollection: Collection<Document>,
@@ -10,6 +11,7 @@ export function createAdminRoutes(
   applicationCollection: Collection<Document>,
   recruiterRequestCollection: Collection<Document>,
   blogCollection: Collection<Document>,
+  plansCollection: Collection<Document>,
 ) {
   const router = Router();
 
@@ -213,7 +215,7 @@ export function createAdminRoutes(
       if (request) {
         await userCollection.updateOne(
           { userId: request.userId },
-          { $set: { role: 'recruiter' } },
+          { $set: { role: 'recruiter', plan: 'recruiter_free' } },
         );
       }
 
@@ -240,7 +242,7 @@ export function createAdminRoutes(
       if (request) {
         await userCollection.updateOne(
           { userId: request.userId },
-          { $set: { role: 'seeker' } },
+          { $set: { role: 'seeker', plan: 'free_seeker' } },
         );
       }
 
@@ -342,6 +344,131 @@ export function createAdminRoutes(
       sendSuccess(res, { totalUsers, totalJobs, totalApplications, totalRecruiters });
     } catch {
       sendError(res, 'Failed to fetch analytics');
+    }
+  });
+
+  // ─── Plans CRUD ───────────────────────────────────────────────────
+
+  // GET /api/admin/plans — list all plans from DB (seed if empty)
+  router.get('/plans', verifyToken, requireRole('admin'), async (_req: AuthRequest, res: Response) => {
+    try {
+      const count = await plansCollection.countDocuments();
+      if (count === 0) {
+        const seed = PLANS.map((p) => ({ ...p, createdAt: new Date(), updatedAt: new Date() }));
+        await plansCollection.insertMany(seed);
+      }
+      const plans = await plansCollection.find().sort({ role: 1, price: 1 }).toArray();
+      sendSuccess(res, plans);
+    } catch {
+      sendError(res, 'Failed to fetch plans');
+    }
+  });
+
+  // GET /api/admin/plans/:id — get single plan
+  router.get('/plans/:id', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const plan = await plansCollection.findOne({ _id: new ObjectId(id) });
+      if (!plan) return sendError(res, 'Plan not found', 404);
+      sendSuccess(res, plan);
+    } catch {
+      sendError(res, 'Failed to fetch plan');
+    }
+  });
+
+  // POST /api/admin/plans — create new plan
+  router.post('/plans', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+      const {
+        id: planId,
+        name,
+        description,
+        price,
+        priceLabel,
+        interval,
+        role,
+        features,
+        limits,
+        stripePriceId,
+        isFree,
+      } = req.body;
+
+      if (!planId || !name || !role) {
+        return sendError(res, 'id, name, and role are required', 400);
+      }
+
+      const exists = await plansCollection.findOne({ id: planId });
+      if (exists) return sendError(res, 'Plan with this id already exists', 400);
+
+      const plan = {
+        id: planId,
+        name,
+        description: description || '',
+        price: price || 0,
+        priceLabel: priceLabel || 'Free',
+        interval: interval || 'month',
+        role,
+        features: features || [],
+        limits: limits || {},
+        stripePriceId: stripePriceId || '',
+        isFree: isFree ?? true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const result = await plansCollection.insertOne(plan);
+      sendSuccess(res, { ...plan, _id: result.insertedId }, 201);
+    } catch {
+      sendError(res, 'Failed to create plan');
+    }
+  });
+
+  // PATCH /api/admin/plans/:id — update plan
+  router.patch('/plans/:id', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!ObjectId.isValid(id)) return sendError(res, 'Invalid plan ID', 400);
+
+      const updateData = { ...req.body };
+      delete updateData._id;
+      delete updateData.createdAt;
+      updateData.updatedAt = new Date();
+
+      const result = await plansCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updateData },
+      );
+
+      if (result.matchedCount === 0) return sendError(res, 'Plan not found', 404);
+      sendSuccess(res, { message: 'Plan updated' });
+    } catch {
+      sendError(res, 'Failed to update plan');
+    }
+  });
+
+  // DELETE /api/admin/plans/:id — delete plan
+  router.delete('/plans/:id', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!ObjectId.isValid(id)) return sendError(res, 'Invalid plan ID', 400);
+
+      const result = await plansCollection.deleteOne({ _id: new ObjectId(id) });
+      if (result.deletedCount === 0) return sendError(res, 'Plan not found', 404);
+      sendSuccess(res, { message: 'Plan deleted' });
+    } catch {
+      sendError(res, 'Failed to delete plan');
+    }
+  });
+
+  // POST /api/admin/plans/seed — reseed plans from defaults
+  router.post('/plans/seed', verifyToken, requireRole('admin'), async (_req: AuthRequest, res: Response) => {
+    try {
+      await plansCollection.deleteMany({});
+      const seed = PLANS.map((p) => ({ ...p, createdAt: new Date(), updatedAt: new Date() }));
+      await plansCollection.insertMany(seed);
+      sendSuccess(res, { message: 'Plans reseeded', count: seed.length });
+    } catch {
+      sendError(res, 'Failed to reseed plans');
     }
   });
 

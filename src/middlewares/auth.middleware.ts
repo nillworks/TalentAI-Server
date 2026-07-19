@@ -50,6 +50,9 @@ export const verifyToken = async (
       if (user?.role) {
         (req.user as any).role = user.role;
       }
+      if (user?.plan) {
+        (req.user as any).plan = user.plan;
+      }
     }
 
     next();

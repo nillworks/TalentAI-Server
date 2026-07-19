@@ -16,6 +16,7 @@ import { createBlogRoutes } from './modules/blog/blog.route';
 import { createAIRoutes } from './modules/ai/ai.route';
 import { createSeekerProfileRoutes } from './modules/seeker-profile/seekerProfile.route';
 import { createRecruiterProfileRoutes } from './modules/recruiter-profile/recruiterProfile.route';
+import { createPaymentRoutes } from './modules/payments/payment.route';
 import { Db } from 'mongodb';
 import { setUserCollection } from './middlewares/auth.middleware';
 
@@ -25,6 +26,14 @@ export function createApp(db: Db) {
   app.use(helmet());
   app.use(mongoSanitize());
   app.use(cookieParser());
+
+  // Stripe webhook needs raw body — mount before express.json()
+  app.post(
+    '/api/payments/webhook',
+    express.raw({ type: 'application/json' }),
+    (_req, _res, next) => next(),
+  );
+
   app.use(express.json({ limit: '10mb' }));
   app.use(
     cors({
@@ -51,6 +60,7 @@ export function createApp(db: Db) {
   const blogCollection = db.collection('blogs');
   const seekerProfileCollection = db.collection('seekerProfiles');
   const recruiterProfileCollection = db.collection('recruiterProfiles');
+  const plansCollection = db.collection('plans');
 
   app.use('/api/auth', createAuthRoutes(userCollection));
   app.use('/api/jobs', createJobRoutes(jobCollection, applicationCollection));
@@ -58,11 +68,12 @@ export function createApp(db: Db) {
   app.use('/api/saved-jobs', createSavedJobRoutes(savedJobCollection));
   app.use('/api/users', createUserRoutes(userCollection));
   app.use('/api/recruiter', createRecruiterRoutes(jobCollection, applicationCollection, recruiterRequestCollection, userCollection));
-  app.use('/api/admin', createAdminRoutes(userCollection, jobCollection, applicationCollection, recruiterRequestCollection, blogCollection));
+  app.use('/api/admin', createAdminRoutes(userCollection, jobCollection, applicationCollection, recruiterRequestCollection, blogCollection, plansCollection));
   app.use('/api/blog', createBlogRoutes(blogCollection));
   app.use('/api/ai', createAIRoutes());
   app.use('/api/seeker', createSeekerProfileRoutes(seekerProfileCollection));
   app.use('/api/recruiter-profile', createRecruiterProfileRoutes(recruiterProfileCollection));
+  app.use('/api/payments', createPaymentRoutes(userCollection, applicationCollection, jobCollection, plansCollection));
 
   app.use(globalErrorHandler);
 
