@@ -34,10 +34,21 @@ export function createApp(db: Db) {
     (_req, _res, next) => next(),
   );
 
+  const allowedOrigins = (process.env.CLIENT_URL || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   app.use(express.json({ limit: '10mb' }));
   app.use(
     cors({
-      origin: process.env.CLIENT_URL,
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       credentials: true,
     }),
   );
@@ -61,6 +72,7 @@ export function createApp(db: Db) {
   const seekerProfileCollection = db.collection('seekerProfiles');
   const recruiterProfileCollection = db.collection('recruiterProfiles');
   const plansCollection = db.collection('plans');
+  const subscriptionsCollection = db.collection('subscriptions');
 
   app.use('/api/auth', createAuthRoutes(userCollection));
   app.use('/api/jobs', createJobRoutes(jobCollection, applicationCollection));
@@ -73,7 +85,7 @@ export function createApp(db: Db) {
   app.use('/api/ai', createAIRoutes());
   app.use('/api/seeker', createSeekerProfileRoutes(seekerProfileCollection));
   app.use('/api/recruiter-profile', createRecruiterProfileRoutes(recruiterProfileCollection));
-  app.use('/api/payments', createPaymentRoutes(userCollection, applicationCollection, jobCollection, plansCollection));
+  app.use('/api/payments', createPaymentRoutes(userCollection, applicationCollection, jobCollection, plansCollection, subscriptionsCollection));
 
   app.use(globalErrorHandler);
 

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Collection, Document } from 'mongodb';
+import { Collection, Document, ObjectId } from 'mongodb';
 import { AuthRequest } from '../../types/express.d';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { sendSuccess, sendError } from '../../utils/response';
@@ -12,6 +12,7 @@ export function createPaymentRoutes(
   applicationCollection: Collection<Document>,
   jobCollection: Collection<Document>,
   plansCollection: Collection<Document>,
+  subscriptionsCollection: Collection<Document>,
 ) {
   const router = Router();
 
@@ -36,7 +37,7 @@ export function createPaymentRoutes(
       const userId = req.user?.sub;
       if (!userId) return sendError(res, 'Unauthorized', 401);
 
-      const user = await userCollection.findOne({ userId });
+      const user = await userCollection.findOne({ _id: new ObjectId(userId) });
       if (!user) return sendError(res, 'User not found', 404);
 
       const planId: PlanType = user.plan || 'free_seeker';
@@ -67,6 +68,23 @@ export function createPaymentRoutes(
     }
   });
 
+  // GET /api/payments/my-subscription — get active subscription record from DB
+  router.get('/my-subscription', verifyToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) return sendError(res, 'Unauthorized', 401);
+
+      const subscription = await subscriptionsCollection.findOne(
+        { userId, status: 'active' },
+        { sort: { createdAt: -1 } },
+      );
+
+      sendSuccess(res, subscription || null);
+    } catch {
+      sendError(res, 'Failed to fetch subscription');
+    }
+  });
+
   // POST /api/payments/create-checkout — TechBazaar style: price_data inline
   router.post('/create-checkout', verifyToken, async (req: AuthRequest, res: Response) => {
     try {
@@ -84,8 +102,12 @@ export function createPaymentRoutes(
       if (!planDoc) return sendError(res, 'Plan not found', 404);
       if (planDoc.isFree) return sendError(res, 'Cannot checkout for free plan', 400);
 
-      const user = await userCollection.findOne({ userId });
+      const user = await userCollection.findOne({ _id: new ObjectId(userId) });
       if (!user) return sendError(res, 'User not found', 404);
+
+      if (user.plan === planId) {
+        return sendError(res, 'You are already on this plan', 400);
+      }
 
       const origin = req.headers.origin || process.env.CLIENT_URL || 'http://localhost:3000';
 
@@ -122,78 +144,72 @@ export function createPaymentRoutes(
     }
   });
 
-  // POST /api/payments/webhook — Stripe webhook handler
-  router.post('/webhook', async (req: Request, res: Response) => {
+  // POST /api/payments/confirm — verify payment + save subscription + update user plan
+  router.post('/confirm', verifyToken, async (req: AuthRequest, res: Response) => {
     try {
       if (!isStripeConfigured()) {
-        return res.status(503).json({ error: 'Stripe not configured' });
+        return sendError(res, 'Stripe not configured', 503);
       }
 
-      const sig = req.headers['stripe-signature'] as string;
-      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
-
-      let event;
-      try {
-        event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
-      } catch (err: any) {
-        sendError(res, `Webhook signature failed: ${err.message}`, 400);
-        return;
-      }
-
-      if (event.type === 'checkout.session.completed') {
-        const session = event.data.object as any;
-        const userId = session.metadata?.userId;
-        const planId = session.metadata?.planId as PlanType;
-
-        if (userId && planId) {
-          await userCollection.updateOne(
-            { userId },
-            {
-              $set: {
-                plan: planId,
-                stripeSubscriptionId: session.subscription,
-                updatedAt: new Date(),
-              },
-            },
-          );
-        }
-      }
-
-      if (event.type === 'customer.subscription.deleted') {
-        const subscription = event.data.object as any;
-        const user = await userCollection.findOne({ stripeSubscriptionId: subscription.id });
-        if (user) {
-          const fallbackPlan: PlanType = user.role === 'recruiter' ? 'recruiter_free' : 'free_seeker';
-          await userCollection.updateOne(
-            { userId: user.userId },
-            { $set: { plan: fallbackPlan, stripeSubscriptionId: null, updatedAt: new Date() } },
-          );
-        }
-      }
-
-      res.json({ received: true });
-    } catch {
-      sendError(res, 'Webhook handler failed');
-    }
-  });
-
-  // POST /api/payments/update-plan — verify from frontend and update user plan
-  router.post('/update-plan', verifyToken, async (req: AuthRequest, res: Response) => {
-    try {
       const userId = req.user?.sub;
       if (!userId) return sendError(res, 'Unauthorized', 401);
 
-      const { planId, stripeSubscriptionId } = req.body;
-      if (!planId) return sendError(res, 'planId required', 400);
+      const { sessionId } = req.body;
+      if (!sessionId) return sendError(res, 'sessionId required', 400);
 
+      const session = await getStripe().checkout.sessions.retrieve(sessionId);
+
+      if (session.payment_status !== 'paid') {
+        return sendError(res, 'Payment not completed', 400);
+      }
+
+      const planId = session.metadata?.planId as PlanType;
+      const stripeSubscriptionId = session.subscription as string;
+
+      if (!planId) {
+        return sendError(res, 'Invalid session metadata', 400);
+      }
+
+      const user = await userCollection.findOne({ _id: new ObjectId(userId) });
+      if (!user) return sendError(res, 'User not found', 404);
+
+      const now = new Date();
+
+      // 1. Update user plan
       await userCollection.updateOne(
-        { userId },
-        { $set: { plan: planId, stripeSubscriptionId: stripeSubscriptionId || null, updatedAt: new Date() } },
+        { _id: new ObjectId(userId) },
+        {
+          $set: {
+            plan: planId,
+            stripeSubscriptionId: stripeSubscriptionId || null,
+            updatedAt: now,
+          },
+        },
       );
 
-      sendSuccess(res, { message: 'Plan updated', planId });
+      // 2. Save subscription record in subscriptions collection
+      const subscriptionDoc = {
+        userId,
+        email: user.email,
+        name: user.name,
+        planId,
+        planName: session.metadata?.planName || planId,
+        stripeSessionId: session.id,
+        stripeSubscriptionId: stripeSubscriptionId || null,
+        stripeCustomerId: session.customer || null,
+        amount: session.amount_total ? session.amount_total / 100 : 0,
+        currency: session.currency || 'usd',
+        status: 'active',
+        paymentStatus: session.payment_status,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await subscriptionsCollection.insertOne(subscriptionDoc);
+
+      sendSuccess(res, { message: 'Plan updated and subscription saved', planId });
     } catch (err: any) {
-      sendError(res, err.message || 'Failed to update plan');
+      sendError(res, err.message || 'Failed to confirm payment');
     }
   });
 
@@ -203,7 +219,7 @@ export function createPaymentRoutes(
       const userId = req.user?.sub;
       if (!userId) return sendError(res, 'Unauthorized', 401);
 
-      const user = await userCollection.findOne({ userId });
+      const user = await userCollection.findOne({ _id: new ObjectId(userId) });
       if (!user) return sendError(res, 'User not found', 404);
 
       if (!user.stripeSubscriptionId) {
@@ -214,8 +230,14 @@ export function createPaymentRoutes(
 
       const fallbackPlan: PlanType = user.role === 'recruiter' ? 'recruiter_free' : 'free_seeker';
       await userCollection.updateOne(
-        { userId },
+        { _id: new ObjectId(userId) },
         { $set: { plan: fallbackPlan, stripeSubscriptionId: null, updatedAt: new Date() } },
+      );
+
+      // Update subscription record
+      await subscriptionsCollection.updateOne(
+        { userId, stripeSubscriptionId: user.stripeSubscriptionId },
+        { $set: { status: 'cancelled', updatedAt: new Date() } },
       );
 
       sendSuccess(res, { message: 'Subscription cancelled' });
