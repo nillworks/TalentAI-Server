@@ -15,7 +15,7 @@ export function createApplicationRoutes(
       const userId = req.user?.sub;
       if (!userId) return sendError(res, 'Unauthorized', 401);
 
-      const { jobId, resumeUrl, coverLetter } = req.body;
+      const { jobId, resumeUrl, portfolioUrl, coverLetter } = req.body;
       if (!jobId) return sendError(res, 'jobId is required', 400);
 
       if (!ObjectId.isValid(jobId)) {
@@ -29,6 +29,7 @@ export function createApplicationRoutes(
         jobId,
         userId,
         resumeUrl: resumeUrl || '',
+        portfolioUrl: portfolioUrl || '',
         coverLetter: coverLetter || '',
         status: 'pending',
         createdAt: new Date(),
@@ -44,6 +45,23 @@ export function createApplicationRoutes(
       sendSuccess(res, { message: 'Application submitted' }, 201);
     } catch {
       sendError(res, 'Failed to submit application');
+    }
+  });
+
+  router.get('/check/:jobId', verifyToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) return sendError(res, 'Unauthorized', 401);
+
+      const { jobId } = req.params;
+      if (!ObjectId.isValid(jobId)) {
+        return sendError(res, 'Invalid job ID', 400);
+      }
+
+      const existing = await applicationCollection.findOne({ userId, jobId });
+      sendSuccess(res, { applied: !!existing });
+    } catch {
+      sendError(res, 'Failed to check application');
     }
   });
 
@@ -68,8 +86,21 @@ export function createApplicationRoutes(
         .limit(limitNum)
         .toArray();
 
+      const applicationsWithJobs = await Promise.all(
+        applications.map(async (app) => {
+          let job = null;
+          if (app.jobId && ObjectId.isValid(app.jobId)) {
+            job = await jobCollection.findOne(
+              { _id: new ObjectId(app.jobId) },
+              { projection: { title: 1, companyName: 1, companyLogo: 1, location: 1, jobType: 1 } },
+            );
+          }
+          return { ...app, job };
+        }),
+      );
+
       const total = await applicationCollection.countDocuments({ userId });
-      sendPaginated(res, applications, total, pageNum, limitNum);
+      sendPaginated(res, applicationsWithJobs, total, pageNum, limitNum);
     } catch {
       sendError(res, 'Failed to fetch applications');
     }
