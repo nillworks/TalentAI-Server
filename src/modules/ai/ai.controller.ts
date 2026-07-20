@@ -9,6 +9,7 @@ import {
   extractTextFromBuffer,
   chatWithCareerCoachStream,
   classifyResumes,
+  generateJobPostFromDescription,
   CoverLetterInput,
   RecommendationInput,
   JobForRecommendation,
@@ -363,6 +364,32 @@ export function createResumeClassifierHandler(
       return sendSuccess(res, { classifications, totalProfiles: resumes.length });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to classify resumes';
+      return sendError(res, message);
+    }
+  };
+}
+
+// ==================== AI Job Post Generator ====================
+
+export function createGenerateJobPostHandler() {
+  return async (req: AuthRequest, res: Response) => {
+    try {
+      const { description } = req.body;
+
+      if (!description || typeof description !== 'string') {
+        return sendError(res, 'Description is required', 400);
+      }
+
+      const wordCount = description.trim().split(/\s+/).length;
+      if (wordCount < 20) {
+        return sendError(res, `Description must be at least 20 words (you wrote ${wordCount})`, 400);
+      }
+
+      const result = await generateJobPostFromDescription(description);
+
+      return sendSuccess(res, result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to generate job post';
       return sendError(res, message);
     }
   };

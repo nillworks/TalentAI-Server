@@ -368,18 +368,70 @@ export async function classifyResumes(
   const prompt = buildClassifierPrompt(jobTitle, jobRequirements, resumes);
 
   try {
-    const responseText = await tryGemini(
-      async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: MODEL });
-        const result = await model.generateContent(prompt);
-        return result.response.text().trim();
-      },
-      'Failed to classify resumes',
-    );
+  const responseText = await tryGemini(
+    async (genAI) => {
+      const model = genAI.getGenerativeModel({ model: MODEL });
+      const result = await model.generateContent(prompt);
+      return result.response.text().trim();
+    },
+    'Failed to classify resumes',
+  );
 
-    const json = extractJsonArray(responseText);
-    return json ? JSON.parse(json) : [];
+  const json = extractJsonArray(responseText);
+  return json ? JSON.parse(json) : [];
   } catch {
     return [];
   }
+}
+
+// ==================== AI Job Post Generator ====================
+
+export async function generateJobPostFromDescription(
+  description: string,
+): Promise<{
+  title: string;
+  companyName: string;
+  category: string;
+  jobType: string;
+  location: string;
+  salaryMin: number;
+  salaryMax: number;
+  shortDescription: string;
+  fullDescription: string;
+  requirements: string[];
+}> {
+  const prompt = `You are an expert job posting assistant. Based on the following job description, generate a complete structured job posting.
+
+Job Description:
+${description}
+
+Available categories: Technology, Design, Marketing, Finance, Education, Healthcare, Engineering, Sales, Human Resources, Other
+Available job types: full-time, part-time, remote, contract
+
+Return ONLY a valid JSON object with these exact keys:
+- title: string (job title)
+- companyName: string (invent a realistic company name if not mentioned)
+- category: string (must be one of the available categories above)
+- jobType: string (must be one of the available job types above)
+- location: string (city, country)
+- salaryMin: number (minimum monthly salary in BDT, realistic for the role)
+- salaryMax: number (maximum monthly salary in BDT, realistic for the role)
+- shortDescription: string (2-3 sentence summary for job cards)
+- fullDescription: string (detailed job description, responsibilities, ideal candidate, 3-5 paragraphs)
+- requirements: string[] (array of 5-8 specific skill/qualification requirements)
+
+Do NOT include markdown formatting. Return ONLY the JSON object.`;
+
+  const responseText = await tryGemini(
+    async (genAI) => {
+      const model = genAI.getGenerativeModel({ model: MODEL });
+      const result = await model.generateContent(prompt);
+      return result.response.text().trim();
+    },
+    'Failed to generate job post',
+  );
+
+  const json = extractJsonObject(responseText);
+  if (!json) throw new Error('Failed to parse generated job post');
+  return JSON.parse(json);
 }

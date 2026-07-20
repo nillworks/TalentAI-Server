@@ -12,6 +12,7 @@ import {
   createChatHistoryHandler,
   createChatClearHandler,
   createResumeClassifierHandler,
+  createGenerateJobPostHandler,
 } from './ai.controller';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -41,6 +42,8 @@ export function createAIRoutes(
   router.delete('/chat/history', verifyToken, createChatClearHandler(chatCollection));
 
   router.post('/classify-resumes', verifyToken, createResumeClassifierHandler(seekerProfileCollection));
+
+  router.post('/generate-job-post', verifyToken, createGenerateJobPostHandler());
 
   return router;
 }
