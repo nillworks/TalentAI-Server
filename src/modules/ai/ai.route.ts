@@ -1,59 +1,43 @@
-import { Router, Response } from 'express';
+import { Router } from 'express';
+import { Collection, Document } from 'mongodb';
 import { AuthRequest } from '../../types/express.d';
 import { verifyToken } from '../../middlewares/auth.middleware';
-import { sendSuccess, sendError } from '../../utils/response';
+import { sendError } from '../../utils/response';
+import multer from 'multer';
+import {
+  createCoverLetterHandler,
+  createRecommendationsHandler,
+  createResumeAnalyzeHandler,
+  createChatHandler,
+  createChatHistoryHandler,
+  createChatClearHandler,
+  createResumeClassifierHandler,
+} from './ai.controller';
 
-export function createAIRoutes() {
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+export function createAIRoutes(
+  jobCollection: Collection<Document>,
+  seekerProfileCollection: Collection<Document>,
+  chatCollection: Collection<Document>,
+) {
   const router = Router();
 
-  router.post('/cover-letter', verifyToken, async (req: AuthRequest, res: Response) => {
-    try {
-      const { jobDescription, resumeData } = req.body;
-      sendSuccess(res, { message: 'AI cover letter endpoint — implement with Gemini/Groq' });
-    } catch {
-      sendError(res, 'Failed to generate cover letter');
-    }
-  });
+  router.post('/cover-letter', verifyToken, createCoverLetterHandler());
 
-  router.post('/recommendations', verifyToken, async (req: AuthRequest, res: Response) => {
-    try {
-      sendSuccess(res, { message: 'AI recommendations endpoint — implement with Gemini/Groq' });
-    } catch {
-      sendError(res, 'Failed to get recommendations');
-    }
-  });
+  router.post('/recommendations', verifyToken, createRecommendationsHandler(jobCollection));
 
-  router.post('/resume-analyze', verifyToken, async (req: AuthRequest, res: Response) => {
-    try {
-      sendSuccess(res, { message: 'AI resume analysis endpoint — implement with Gemini/Groq' });
-    } catch {
-      sendError(res, 'Failed to analyze resume');
-    }
-  });
+  router.post('/resume-analyze', verifyToken, upload.single('resume'), createResumeAnalyzeHandler(seekerProfileCollection));
 
-  router.get('/chat', verifyToken, async (req: AuthRequest, res: Response) => {
-    try {
-      sendSuccess(res, { message: 'AI chat endpoint — implement with streaming' });
-    } catch {
-      sendError(res, 'Failed to process chat');
-    }
-  });
+  router.post('/chat', verifyToken, createChatHandler(chatCollection));
 
-  router.get('/chat/history', verifyToken, async (req: AuthRequest, res: Response) => {
-    try {
-      sendSuccess(res, []);
-    } catch {
-      sendError(res, 'Failed to fetch chat history');
-    }
-  });
+  router.get('/chat/history', verifyToken, createChatHistoryHandler(chatCollection));
 
-  router.delete('/chat/history', verifyToken, async (req: AuthRequest, res: Response) => {
-    try {
-      sendSuccess(res, { message: 'Chat history cleared' });
-    } catch {
-      sendError(res, 'Failed to clear chat history');
-    }
-  });
+  router.delete('/chat/history', verifyToken, createChatClearHandler(chatCollection));
+
+  router.post('/classify-resumes', verifyToken, createResumeClassifierHandler(seekerProfileCollection));
 
   return router;
 }
+
+export default createAIRoutes;

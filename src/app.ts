@@ -73,6 +73,7 @@ export function createApp(db: Db) {
   const recruiterProfileCollection = db.collection('recruiterProfiles');
   const plansCollection = db.collection('plans');
   const subscriptionsCollection = db.collection('subscriptions');
+  const chatCollection = db.collection('chatHistory');
 
   app.use('/api/auth', createAuthRoutes(userCollection));
   app.use('/api/jobs', createJobRoutes(jobCollection, applicationCollection));
@@ -82,7 +83,7 @@ export function createApp(db: Db) {
   app.use('/api/recruiter', createRecruiterRoutes(jobCollection, applicationCollection, recruiterRequestCollection, userCollection));
   app.use('/api/admin', createAdminRoutes(userCollection, jobCollection, applicationCollection, recruiterRequestCollection, blogCollection, plansCollection));
   app.use('/api/blog', createBlogRoutes(blogCollection));
-  app.use('/api/ai', createAIRoutes());
+  app.use('/api/ai', createAIRoutes(jobCollection, seekerProfileCollection, chatCollection));
   app.use('/api/seeker', createSeekerProfileRoutes(seekerProfileCollection));
   app.use('/api/recruiter-profile', createRecruiterProfileRoutes(recruiterProfileCollection));
   app.use('/api/payments', createPaymentRoutes(userCollection, applicationCollection, jobCollection, plansCollection, subscriptionsCollection));
