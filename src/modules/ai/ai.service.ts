@@ -293,6 +293,8 @@ export interface ChatMessage {
 
 export async function chatWithCareerCoachStream(
   messages: ChatMessage[],
+  websiteContext: string,
+  userContext: string,
   onChunk: (text: string) => void,
   onDone: () => void,
   onError: (err: Error) => void,
@@ -304,7 +306,22 @@ export async function chatWithCareerCoachStream(
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.text }],
       }));
-      const chat = model.startChat({ history });
+
+      const systemParts = [
+        'You are TalentAI\'s Career Coach — a helpful AI assistant for the TalentAI job platform.',
+        'You help users with career advice, job search tips, resume help, interview prep, salary insights, and navigating the TalentAI platform.',
+        'Be friendly, concise, and use markdown for formatting.',
+        '',
+        websiteContext,
+      ];
+      if (userContext) {
+        systemParts.push('', userContext);
+      }
+
+      const chat = model.startChat({
+        history,
+        systemInstruction: { role: 'user', parts: [{ text: systemParts.join('\n') }] },
+      });
       const lastMessage = messages[messages.length - 1];
       const result = await chat.sendMessageStream(lastMessage.text);
       for await (const chunk of result.stream) {

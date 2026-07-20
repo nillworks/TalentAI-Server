@@ -149,7 +149,15 @@ export function createResumeAnalyzeHandler(
 
 // ==================== Career Coach Chatbot ====================
 
-export function createChatHandler(chatCollection: Collection<Document>) {
+export function createChatHandler(
+  chatCollection: Collection<Document>,
+  jobCollection: Collection<Document>,
+  seekerProfileCollection: Collection<Document>,
+  userCollection: Collection<Document>,
+  applicationCollection: Collection<Document>,
+  savedJobCollection: Collection<Document>,
+  plansCollection: Collection<Document>,
+) {
   return async (req: AuthRequest, res: Response) => {
     try {
       const { message: userMessage, conversationId } = req.body;
@@ -160,11 +168,35 @@ export function createChatHandler(chatCollection: Collection<Document>) {
         return sendError(res, 'Message is required', 400);
       }
 
-      const history = await chatCollection
-        .find({ userId, conversationId: conversationId || null })
-        .sort({ createdAt: 1 })
-        .limit(50)
-        .toArray();
+      const [history, totalJobs, jobCategories, userData, profile, plans] = await Promise.all([
+        chatCollection
+          .find({ userId, conversationId: conversationId || null })
+          .sort({ createdAt: 1 })
+          .limit(50)
+          .toArray(),
+
+        jobCollection.countDocuments({ status: 'approved' }),
+
+        jobCollection.aggregate([
+          { $match: { status: 'approved' } },
+          { $group: { _id: '$category' } },
+          { $sort: { _id: 1 } },
+        ]).toArray().then((cats) => cats.map((c) => c._id)),
+
+        userCollection.findOne({ _id: new ObjectId(userId) }),
+
+        seekerProfileCollection.findOne({ userId }),
+
+        plansCollection.find().sort({ price: 1 }).toArray(),
+      ]);
+
+      const [appliedCount, savedCount] = await Promise.all([
+        applicationCollection.countDocuments({ userId }),
+        savedJobCollection.countDocuments({ userId }),
+      ]);
+
+      const websiteContext = buildWebsiteContext(totalJobs, jobCategories, plans);
+      const userContext = buildUserContext(userData, profile, appliedCount, savedCount);
 
       const messages: ChatMessage[] = history.map((h) => ({
         role: h.role as 'user' | 'model',
@@ -189,6 +221,8 @@ export function createChatHandler(chatCollection: Collection<Document>) {
 
       await chatWithCareerCoachStream(
         messages,
+        websiteContext,
+        userContext,
         (chunk) => {
           fullResponse += chunk;
           res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
@@ -218,6 +252,35 @@ export function createChatHandler(chatCollection: Collection<Document>) {
       return sendError(res, message);
     }
   };
+}
+
+function buildWebsiteContext(totalJobs: number, categories: string[], plans: Document[]): string {
+  const planSummary = plans.map((p) => `- ${p.name}: $${p.price}/${p.interval || 'month'} - ${p.description || ''}`).join('\n');
+  return `=== TALENTAI WEBSITE CONTEXT ===
+TalentAI is an AI-powered job board and career coaching platform.
+- Total available jobs: ${totalJobs}
+- Job categories: ${categories.join(', ') || 'Various'}
+- Plans & Pricing:
+${planSummary || '- Free plan available; Paid plans with more features'}
+- Features: AI cover letter generator, AI resume analysis, career coach chatbot, smart job recommendations, resume classifier for recruiters
+- Users can be: job seekers or recruiters
+- Seekers: browse jobs, apply, save jobs, get AI recommendations
+- Recruiters: post jobs, manage applications, classify resumes with AI`;
+}
+
+function buildUserContext(user: Document | null, profile: Document | null, appliedCount: number, savedCount: number): string {
+  if (!user) return '';
+  return `=== YOUR DATA ===
+Your name: ${user.name || 'Not set'}
+Your email: ${user.email}
+Your role: ${user.role || 'seeker'}
+Your plan: ${user.plan || 'free_seeker'}
+Applications submitted: ${appliedCount}
+Saved jobs: ${savedCount}
+${profile?.skills?.length ? `Your skills: ${profile.skills.join(', ')}` : ''}
+${profile?.experience?.length ? `Experience entries: ${profile.experience.length}` : ''}
+${profile?.education?.length ? `Education entries: ${profile.education.length}` : ''}
+${profile?.bio ? `Bio: ${profile.bio}` : ''}`;
 }
 
 // ==================== Chat History ====================
@@ -264,31 +327,40 @@ export function createResumeClassifierHandler(
 ) {
   return async (req: AuthRequest, res: Response) => {
     try {
-      const { jobTitle, jobRequirements } = req.body;
+      const { jobTitle, jobRequirements, candidates } = req.body;
 
       if (!jobTitle || !jobRequirements || !Array.isArray(jobRequirements)) {
         return sendError(res, 'Job title and requirements array are required', 400);
       }
 
-      const profiles = await seekerProfileCollection
-        .find({ resumeUrl: { $exists: true, $ne: '' } })
-        .limit(50)
-        .toArray();
+      let resumes: { userId: string; resumeText: string }[];
 
-      const resumes = profiles
-        .filter((p) => p.resumeUrl)
-        .map((p) => ({
-          userId: p.userId,
-          resumeText: p.resumeUrl || '',
-        }));
+      if (candidates && Array.isArray(candidates) && candidates.length > 0) {
+        resumes = candidates.filter((c: any) => c.resumeText?.trim().length >= 20);
+        if (resumes.length === 0) {
+          return sendError(res, 'Provide at least one candidate with meaningful resume text (min 20 chars)', 400);
+        }
+      } else {
+        const profiles = await seekerProfileCollection
+          .find({ resumeUrl: { $exists: true, $ne: '' } })
+          .limit(50)
+          .toArray();
+
+        resumes = profiles
+          .filter((p) => p.resumeUrl)
+          .map((p) => ({
+            userId: p.userId,
+            resumeText: p.resumeUrl || '',
+          }));
+      }
 
       if (resumes.length === 0) {
-        return sendSuccess(res, { classifications: [] });
+        return sendSuccess(res, { classifications: [], totalProfiles: 0 });
       }
 
       const classifications = await classifyResumes(jobTitle, jobRequirements, resumes);
 
-      return sendSuccess(res, { classifications, totalProfiles: profiles.length });
+      return sendSuccess(res, { classifications, totalProfiles: resumes.length });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to classify resumes';
       return sendError(res, message);

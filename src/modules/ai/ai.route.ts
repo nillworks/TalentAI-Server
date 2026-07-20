@@ -21,6 +21,11 @@ export function createAIRoutes(
   seekerProfileCollection: Collection<Document>,
   chatCollection: Collection<Document>,
 ) {
+  const userCollection = jobCollection.db.collection('user');
+  const applicationCollection = jobCollection.db.collection('applications');
+  const savedJobCollection = jobCollection.db.collection('savedJobs');
+  const plansCollection = jobCollection.db.collection('plans');
+
   const router = Router();
 
   router.post('/cover-letter', verifyToken, createCoverLetterHandler());
@@ -29,7 +34,7 @@ export function createAIRoutes(
 
   router.post('/resume-analyze', verifyToken, upload.single('resume'), createResumeAnalyzeHandler(seekerProfileCollection));
 
-  router.post('/chat', verifyToken, createChatHandler(chatCollection));
+  router.post('/chat', verifyToken, createChatHandler(chatCollection, jobCollection, seekerProfileCollection, userCollection, applicationCollection, savedJobCollection, plansCollection));
 
   router.get('/chat/history', verifyToken, createChatHistoryHandler(chatCollection));
 
