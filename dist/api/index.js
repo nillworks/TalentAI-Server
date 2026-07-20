@@ -1,52 +1,63 @@
+import dotenv from 'dotenv';
+dotenv.config();
+import { MongoClient, ServerApiVersion } from 'mongodb';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import mongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
-import { globalErrorHandler } from './middlewares/error.middleware';
-import { createAuthRoutes } from './modules/auth/auth.route';
-import { createJobRoutes } from './modules/jobs/job.route';
-import { createApplicationRoutes } from './modules/applications/application.route';
-import { createSavedJobRoutes } from './modules/saved-jobs/savedJob.route';
-import { createUserRoutes } from './modules/users/user.route';
-import { createRecruiterRoutes } from './modules/recruiter/recruiter.route';
-import { createAdminRoutes } from './modules/admin/admin.route';
-import { createBlogRoutes } from './modules/blog/blog.route';
-import { createAIRoutes } from './modules/ai/ai.route';
-import { createSeekerProfileRoutes } from './modules/seeker-profile/seekerProfile.route';
-import { createRecruiterProfileRoutes } from './modules/recruiter-profile/recruiterProfile.route';
-import { createPaymentRoutes } from './modules/payments/payment.route';
-import { setUserCollection } from './middlewares/auth.middleware';
-export function createApp(db) {
+import { globalErrorHandler } from '../dist/middlewares/error.middleware.js';
+import { createAuthRoutes } from '../dist/modules/auth/auth.route.js';
+import { createJobRoutes } from '../dist/modules/jobs/job.route.js';
+import { createApplicationRoutes } from '../dist/modules/applications/application.route.js';
+import { createSavedJobRoutes } from '../dist/modules/saved-jobs/savedJob.route.js';
+import { createUserRoutes } from '../dist/modules/users/user.route.js';
+import { createRecruiterRoutes } from '../dist/modules/recruiter/recruiter.route.js';
+import { createAdminRoutes } from '../dist/modules/admin/admin.route.js';
+import { createBlogRoutes } from '../dist/modules/blog/blog.route.js';
+import { createAIRoutes } from '../dist/modules/ai/ai.route.js';
+import { createSeekerProfileRoutes } from '../dist/modules/seeker-profile/seekerProfile.route.js';
+import { createRecruiterProfileRoutes } from '../dist/modules/recruiter-profile/recruiterProfile.route.js';
+import { createPaymentRoutes } from '../dist/modules/payments/payment.route.js';
+import { setUserCollection } from '../dist/middlewares/auth.middleware.js';
+let cachedDb = null;
+let cachedApp = null;
+async function getDb() {
+    if (cachedDb)
+        return cachedDb;
+    const client = new MongoClient(process.env.MONGODB_URI, {
+        serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
+    });
+    await client.connect();
+    cachedDb = client.db('TalentAI');
+    return cachedDb;
+}
+async function getApp() {
+    if (cachedApp)
+        return cachedApp;
+    const db = await getDb();
     const app = express();
+    app.set('trust proxy', 1);
     app.use(helmet());
     app.use(mongoSanitize());
     app.use(cookieParser());
-    // Stripe webhook needs raw body — mount before express.json()
     app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), (_req, _res, next) => next());
-    const allowedOrigins = (process.env.CLIENT_URL || '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+    const allowedOrigins = (process.env.CLIENT_URL || '').split(',').map((s) => s.trim()).filter(Boolean);
     app.use(express.json({ limit: '10mb' }));
     app.use(cors({
         origin: (origin, callback) => {
-            if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+            if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin))
                 callback(null, true);
-            }
-            else {
+            else
                 callback(new Error('Not allowed by CORS'));
-            }
         },
         credentials: true,
     }));
     app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
     const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
     app.use('/api/ai', aiLimiter);
-    app.get('/', (_req, res) => {
-        res.json({ success: true, message: 'TalentAI backend is running' });
-    });
+    app.get('/', (_req, res) => { res.json({ success: true, message: 'TalentAI backend is running' }); });
     const userCollection = db.collection('user');
     setUserCollection(userCollection);
     const jobCollection = db.collection('jobs');
@@ -72,5 +83,16 @@ export function createApp(db) {
     app.use('/api/recruiter-profile', createRecruiterProfileRoutes(recruiterProfileCollection));
     app.use('/api/payments', createPaymentRoutes(userCollection, applicationCollection, jobCollection, plansCollection, subscriptionsCollection));
     app.use(globalErrorHandler);
+    cachedApp = app;
     return app;
+}
+export default async function handler(req, res) {
+    try {
+        const app = await getApp();
+        return app(req, res);
+    }
+    catch (err) {
+        console.error('Handler error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Server error' });
+    }
 }

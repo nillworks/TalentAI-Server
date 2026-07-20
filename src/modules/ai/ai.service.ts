@@ -1,12 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { PDFParse } from 'pdf-parse';
-import mammoth from 'mammoth';
 
 function getGenAI(): GoogleGenerativeAI {
   return new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 }
 
-const MODEL = 'gemini-flash-latest';
+const MODEL = 'gemini-3-flash-preview';
 
 function hasGeminiKey(): boolean {
   const key = process.env.GEMINI_API_KEY || '';
@@ -264,6 +262,7 @@ export async function extractTextFromBuffer(
   mimetype: string,
 ): Promise<string> {
   if (mimetype === 'application/pdf') {
+    const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse(new Uint8Array(buffer));
     const result: any = await parser.getText();
     return result.text || '';
@@ -273,6 +272,7 @@ export async function extractTextFromBuffer(
     mimetype ===
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ) {
+    const mammoth = (await import('mammoth')).default;
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
   }
