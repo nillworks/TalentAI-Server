@@ -10,6 +10,19 @@ export function createJobRoutes(
 ) {
   const router = Router();
 
+  // Split a comma-separated query param (e.g. "Technology,Design") into a
+  // cleaned list of values, dropping the "All" sentinel and empty entries.
+  const parseMulti = (value?: string): string[] =>
+    (value || '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => v && v !== 'All');
+
+  // Escape user input before using it inside a RegExp so filter values with
+  // special characters (e.g. "C++", "Node.js") match literally.
+  const escapeRegex = (value: string): string =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   router.get('/', async (req, res: Response) => {
     try {
       const {
@@ -19,32 +32,60 @@ export function createJobRoutes(
         type,
         category,
         location,
+        minSalary,
+        maxSalary,
         sortBy,
       } = req.query as Record<string, string>;
 
       const pageNum = Number(page);
       const limitNum = Number(limit);
 
-      const query: Record<string, any> = { status: 'approved' };
+      // Each active filter contributes one condition to `and`, so multiple
+      // filters combine with AND while multi-value filters match with $in (OR
+      // within the same field). This keeps search + multi-location from
+      // clobbering each other on a shared `$or` key.
+      const and: Record<string, any>[] = [{ status: 'approved' }];
 
       if (search) {
-        query.$or = [
-          { title: { $regex: new RegExp(search, 'i') } },
-          { companyName: { $regex: new RegExp(search, 'i') } },
-        ];
+        and.push({
+          $or: [
+            { title: { $regex: new RegExp(escapeRegex(search), 'i') } },
+            { companyName: { $regex: new RegExp(escapeRegex(search), 'i') } },
+          ],
+        });
       }
 
-      if (type && type !== 'All') {
-        query.jobType = { $regex: new RegExp(`^${type}$`, 'i') };
+      const types = parseMulti(type);
+      if (types.length) {
+        and.push({
+          jobType: { $in: types.map((t) => new RegExp(`^${escapeRegex(t)}$`, 'i')) },
+        });
       }
 
-      if (category && category !== 'All') {
-        query.category = { $regex: new RegExp(`^${category}$`, 'i') };
+      const categories = parseMulti(category);
+      if (categories.length) {
+        and.push({
+          category: { $in: categories.map((c) => new RegExp(`^${escapeRegex(c)}$`, 'i')) },
+        });
       }
 
-      if (location && location !== 'All') {
-        query.location = { $regex: new RegExp(location, 'i') };
+      const locations = parseMulti(location);
+      if (locations.length) {
+        and.push({
+          location: { $in: locations.map((l) => new RegExp(escapeRegex(l), 'i')) },
+        });
       }
+
+      const min = Number(minSalary);
+      const max = Number(maxSalary);
+      if (!Number.isNaN(min) && minSalary !== undefined && minSalary !== '') {
+        and.push({ salaryMax: { $gte: min } });
+      }
+      if (!Number.isNaN(max) && maxSalary !== undefined && maxSalary !== '') {
+        and.push({ salaryMin: { $lte: max } });
+      }
+
+      const query: Record<string, any> = and.length > 1 ? { $and: and } : and[0];
 
       const sortOptions: Record<string, any> = { createdAt: -1 };
       if (sortBy === 'oldest') sortOptions.createdAt = 1;
@@ -64,6 +105,55 @@ export function createJobRoutes(
       sendPaginated(res, jobs, total, pageNum, limitNum);
     } catch {
       sendError(res, 'Failed to fetch jobs');
+    }
+  });
+
+  // Dynamic filter options built from live data so newly-added categories,
+  // job types, or locations become filterable without any frontend change.
+  router.get('/filter-options', async (_req, res: Response) => {
+    try {
+      const base = { status: 'approved' };
+
+      const distinctField = async (field: string): Promise<string[]> => {
+        const rows = await jobCollection
+          .aggregate([
+            { $match: base },
+            { $group: { _id: `$${field}` } },
+          ])
+          .toArray();
+        return rows
+          .map((r) => r._id)
+          .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+          .sort((a, b) => a.localeCompare(b));
+      };
+
+      const [categories, jobTypes, locations, salaryAgg] = await Promise.all([
+        distinctField('category'),
+        distinctField('jobType'),
+        distinctField('location'),
+        jobCollection
+          .aggregate([
+            { $match: base },
+            {
+              $group: {
+                _id: null,
+                minSalary: { $min: '$salaryMin' },
+                maxSalary: { $max: '$salaryMax' },
+              },
+            },
+          ])
+          .toArray(),
+      ]);
+
+      sendSuccess(res, {
+        categories,
+        jobTypes,
+        locations,
+        minSalary: salaryAgg[0]?.minSalary ?? 0,
+        maxSalary: salaryAgg[0]?.maxSalary ?? 0,
+      });
+    } catch {
+      sendError(res, 'Failed to fetch filter options');
     }
   });
 
