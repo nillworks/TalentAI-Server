@@ -7,7 +7,7 @@
   "scripts": {
     "server": "nodemon --exec tsx src/server.ts",
     "build": "tsc",
-    "build:bundle": "esbuild api/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=api/index.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --external:mongodb --external:stripe --external:jose --external:@google/generative-ai --external:pdf-parse --external:mammoth",
+    "build:bundle": "esbuild api/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=api/index.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --external:mongodb --external:stripe --external:jose --external:@google/generative-ai --external:mammoth --external:pdf2json",
     "start": "node dist/server.js"
   },
   "dependencies": {
@@ -25,7 +25,7 @@
     "mongodb": "^7.5.0",
     "multer": "^2.2.0",
     "openai": "^6.48.0",
-    "pdf-parse": "^2.4.5",
+    "pdf2json": "^4.0.3",
     "stripe": "^22.3.2"
   },
   "devDependencies": {

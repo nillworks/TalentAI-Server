@@ -262,10 +262,22 @@ export async function extractTextFromBuffer(
   mimetype: string,
 ): Promise<string> {
   if (mimetype === 'application/pdf') {
-    const { PDFParse } = await import('pdf-parse');
-    const parser = new PDFParse(new Uint8Array(buffer));
-    const result: any = await parser.getText();
-    return result.text || '';
+    const PDFParser = (await import('pdf2json')).default;
+    return new Promise<string>((resolve, reject) => {
+      const parser = new PDFParser();
+      parser.on('pdfParser_dataError', (errData: any) =>
+        reject(new Error(errData.parserError || 'Failed to parse PDF')),
+      );
+      parser.on('pdfParser_dataReady', (pdfData: any) => {
+        const pages: string[] = pdfData.Pages.map((page: any) =>
+          page.Texts.map((t: any) =>
+            decodeURIComponent(t.R[0]?.T || ''),
+          ).join(' '),
+        );
+        resolve(pages.join('\n'));
+      });
+      parser.parseBuffer(Buffer.from(new Uint8Array(buffer)));
+    });
   }
 
   if (

@@ -35671,6 +35671,8 @@ var import_express2 = __toESM(require_express2(), 1);
 import { ObjectId as ObjectId2 } from "mongodb";
 function createJobRoutes(jobCollection, applicationCollection) {
   const router = (0, import_express2.Router)();
+  const parseMulti = (value) => (value || "").split(",").map((v) => v.trim()).filter((v) => v && v !== "All");
+  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   router.get("/", async (req, res) => {
     try {
       const {
@@ -35680,26 +35682,48 @@ function createJobRoutes(jobCollection, applicationCollection) {
         type,
         category,
         location,
+        minSalary,
+        maxSalary,
         sortBy
       } = req.query;
       const pageNum = Number(page);
       const limitNum = Number(limit);
-      const query = { status: "approved" };
+      const and = [{ status: "approved" }];
       if (search) {
-        query.$or = [
-          { title: { $regex: new RegExp(search, "i") } },
-          { companyName: { $regex: new RegExp(search, "i") } }
-        ];
+        and.push({
+          $or: [
+            { title: { $regex: new RegExp(escapeRegex(search), "i") } },
+            { companyName: { $regex: new RegExp(escapeRegex(search), "i") } }
+          ]
+        });
       }
-      if (type && type !== "All") {
-        query.jobType = { $regex: new RegExp(`^${type}$`, "i") };
+      const types = parseMulti(type);
+      if (types.length) {
+        and.push({
+          jobType: { $in: types.map((t) => new RegExp(`^${escapeRegex(t)}$`, "i")) }
+        });
       }
-      if (category && category !== "All") {
-        query.category = { $regex: new RegExp(`^${category}$`, "i") };
+      const categories = parseMulti(category);
+      if (categories.length) {
+        and.push({
+          category: { $in: categories.map((c) => new RegExp(`^${escapeRegex(c)}$`, "i")) }
+        });
       }
-      if (location && location !== "All") {
-        query.location = { $regex: new RegExp(location, "i") };
+      const locations = parseMulti(location);
+      if (locations.length) {
+        and.push({
+          location: { $in: locations.map((l) => new RegExp(escapeRegex(l), "i")) }
+        });
       }
+      const min = Number(minSalary);
+      const max = Number(maxSalary);
+      if (!Number.isNaN(min) && minSalary !== void 0 && minSalary !== "") {
+        and.push({ salaryMax: { $gte: min } });
+      }
+      if (!Number.isNaN(max) && maxSalary !== void 0 && maxSalary !== "") {
+        and.push({ salaryMin: { $lte: max } });
+      }
+      const query = and.length > 1 ? { $and: and } : and[0];
       const sortOptions = { createdAt: -1 };
       if (sortBy === "oldest") sortOptions.createdAt = 1;
       if (sortBy === "applications") sortOptions.applicationCount = -1;
@@ -35710,6 +35734,42 @@ function createJobRoutes(jobCollection, applicationCollection) {
       sendPaginated(res, jobs, total, pageNum, limitNum);
     } catch {
       sendError(res, "Failed to fetch jobs");
+    }
+  });
+  router.get("/filter-options", async (_req, res) => {
+    try {
+      const base = { status: "approved" };
+      const distinctField = async (field) => {
+        const rows = await jobCollection.aggregate([
+          { $match: base },
+          { $group: { _id: `$${field}` } }
+        ]).toArray();
+        return rows.map((r) => r._id).filter((v) => typeof v === "string" && v.trim() !== "").sort((a, b) => a.localeCompare(b));
+      };
+      const [categories, jobTypes, locations, salaryAgg] = await Promise.all([
+        distinctField("category"),
+        distinctField("jobType"),
+        distinctField("location"),
+        jobCollection.aggregate([
+          { $match: base },
+          {
+            $group: {
+              _id: null,
+              minSalary: { $min: "$salaryMin" },
+              maxSalary: { $max: "$salaryMax" }
+            }
+          }
+        ]).toArray()
+      ]);
+      sendSuccess(res, {
+        categories,
+        jobTypes,
+        locations,
+        minSalary: salaryAgg[0]?.minSalary ?? 0,
+        maxSalary: salaryAgg[0]?.maxSalary ?? 0
+      });
+    } catch {
+      sendError(res, "Failed to fetch filter options");
     }
   });
   router.get("/featured", async (req, res) => {
@@ -36885,10 +36945,23 @@ async function analyzeResumeText(text) {
 }
 async function extractTextFromBuffer(buffer, mimetype) {
   if (mimetype === "application/pdf") {
-    const { PDFParse } = await import("pdf-parse");
-    const parser = new PDFParse(new Uint8Array(buffer));
-    const result = await parser.getText();
-    return result.text || "";
+    const PDFParser = (await import("pdf2json")).default;
+    return new Promise((resolve, reject) => {
+      const parser = new PDFParser();
+      parser.on(
+        "pdfParser_dataError",
+        (errData) => reject(new Error(errData.parserError || "Failed to parse PDF"))
+      );
+      parser.on("pdfParser_dataReady", (pdfData) => {
+        const pages = pdfData.Pages.map(
+          (page) => page.Texts.map(
+            (t) => decodeURIComponent(t.R[0]?.T || "")
+          ).join(" ")
+        );
+        resolve(pages.join("\n"));
+      });
+      parser.parseBuffer(Buffer.from(new Uint8Array(buffer)));
+    });
   }
   if (mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
     const mammoth = (await import("mammoth")).default;
