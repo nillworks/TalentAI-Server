@@ -15,8 +15,8 @@ export function createJobRoutes(
   const parseMulti = (value?: string): string[] =>
     (value || '')
       .split(',')
-      .map((v) => v.trim())
-      .filter((v) => v && v !== 'All');
+      .map(v => v.trim())
+      .filter(v => v && v !== 'All');
 
   // Escape user input before using it inside a RegExp so filter values with
   // special characters (e.g. "C++", "Node.js") match literally.
@@ -58,21 +58,27 @@ export function createJobRoutes(
       const types = parseMulti(type);
       if (types.length) {
         and.push({
-          jobType: { $in: types.map((t) => new RegExp(`^${escapeRegex(t)}$`, 'i')) },
+          jobType: {
+            $in: types.map(t => new RegExp(`^${escapeRegex(t)}$`, 'i')),
+          },
         });
       }
 
       const categories = parseMulti(category);
       if (categories.length) {
         and.push({
-          category: { $in: categories.map((c) => new RegExp(`^${escapeRegex(c)}$`, 'i')) },
+          category: {
+            $in: categories.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i')),
+          },
         });
       }
 
       const locations = parseMulti(location);
       if (locations.length) {
         and.push({
-          location: { $in: locations.map((l) => new RegExp(escapeRegex(l), 'i')) },
+          location: {
+            $in: locations.map(l => new RegExp(escapeRegex(l), 'i')),
+          },
         });
       }
 
@@ -85,7 +91,8 @@ export function createJobRoutes(
         and.push({ salaryMin: { $lte: max } });
       }
 
-      const query: Record<string, any> = and.length > 1 ? { $and: and } : and[0];
+      const query: Record<string, any> =
+        and.length > 1 ? { $and: and } : and[0];
 
       const sortOptions: Record<string, any> = { createdAt: -1 };
       if (sortBy === 'oldest') sortOptions.createdAt = 1;
@@ -116,13 +123,10 @@ export function createJobRoutes(
 
       const distinctField = async (field: string): Promise<string[]> => {
         const rows = await jobCollection
-          .aggregate([
-            { $match: base },
-            { $group: { _id: `$${field}` } },
-          ])
+          .aggregate([{ $match: base }, { $group: { _id: `$${field}` } }])
           .toArray();
         return rows
-          .map((r) => r._id)
+          .map(r => r._id)
           .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
           .sort((a, b) => a.localeCompare(b));
       };
@@ -154,6 +158,53 @@ export function createJobRoutes(
       });
     } catch {
       sendError(res, 'Failed to fetch filter options');
+    }
+  });
+
+  // Returns autocomplete suggestions — distinct values matching the query
+  // across titles, companies, categories, and locations (approved jobs only).
+  router.get('/suggest', async (req, res: Response) => {
+    try {
+      const q = String(req.query.q || '').trim();
+      if (q.length < 2) return sendSuccess(res, { suggestions: [] });
+
+      const escaped = escapeRegex(q);
+      const match = { status: 'approved' };
+
+      const distinctPrefix = async (
+        field: string,
+        limit = 5,
+      ): Promise<string[]> => {
+        const cursor = jobCollection.aggregate([
+          { $match: match },
+          { $match: { [field]: { $regex: `^${escaped}`, $options: 'i' } } },
+          { $group: { _id: `$${field}` } },
+          { $limit: limit },
+          { $sort: { _id: 1 } },
+        ]);
+        const rows = await cursor.toArray();
+        return rows
+          .map(r => r._id as string)
+          .filter(v => typeof v === 'string' && v.trim() !== '');
+      };
+
+      const [titles, companies, categories, locations] = await Promise.all([
+        distinctPrefix('title'),
+        distinctPrefix('companyName'),
+        distinctPrefix('category'),
+        distinctPrefix('location'),
+      ]);
+
+      const suggestions: { text: string; type: string }[] = [
+        ...titles.map(t => ({ text: t, type: 'title' })),
+        ...companies.map(c => ({ text: c, type: 'company' })),
+        ...categories.map(c => ({ text: c, type: 'category' })),
+        ...locations.map(l => ({ text: l, type: 'location' })),
+      ];
+
+      sendSuccess(res, { suggestions });
+    } catch {
+      sendError(res, 'Failed to fetch suggestions');
     }
   });
 
