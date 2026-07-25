@@ -98,8 +98,19 @@ export function createRecommendationsHandler(
 
       const recommendations = await getJobRecommendations(input, availableJobs);
 
+      const enriched = recommendations.map(rec => {
+        const job = availableJobs.find(j => j._id === rec.jobId);
+        return {
+          ...rec,
+          title: job?.title || '',
+          companyName: job?.companyName || '',
+          shortDescription: job?.shortDescription || '',
+          location: job?.location || '',
+        };
+      });
+
       return sendSuccess(res, {
-        recommendations,
+        recommendations: enriched,
         totalJobs: availableJobs.length,
       });
     } catch (err) {
