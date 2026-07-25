@@ -7,7 +7,11 @@ export const checkApplicationLimit = (
   applicationCollection: Collection<Document>,
   plansCollection: Collection<Document>,
 ) => {
-  return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  return async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.sub;
       const planId = (req.user as any)?.plan;
@@ -54,7 +58,11 @@ export const checkJobPostLimit = (
   jobCollection: Collection<Document>,
   plansCollection: Collection<Document>,
 ) => {
-  return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  return async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.sub;
       const planId = (req.user as any)?.plan;

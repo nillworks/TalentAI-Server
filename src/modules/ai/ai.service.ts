@@ -320,8 +320,8 @@ export async function chatWithCareerCoachStream(
       }));
 
       const systemParts = [
-        'You are TalentAI\'s Career Coach — a helpful AI assistant for the TalentAI job platform.',
-        'You help users with career advice, job search tips, resume help, interview prep, salary insights, and navigating the TalentAI platform.',
+        'You are HireMind\'s Career Coach — a helpful AI assistant for the HireMind job platform.',
+        'You help users with career advice, job search tips, resume help, interview prep, salary insights, and navigating the HireMind platform.',
         'Be friendly, concise, and use markdown for formatting.',
         '',
         websiteContext,

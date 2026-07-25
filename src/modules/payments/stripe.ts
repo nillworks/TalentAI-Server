@@ -8,7 +8,7 @@ export function getStripe(): Stripe {
   const apiKey = process.env.STRIPE_SECRET_KEY || '';
   if (!apiKey || apiKey.startsWith('sk_test_your')) {
     throw new Error(
-      'Stripe is not configured. Set a valid STRIPE_SECRET_KEY in your backend .env file and restart the server.'
+      'Stripe is not configured. Set a valid STRIPE_SECRET_KEY in your backend .env file and restart the server.',
     );
   }
 

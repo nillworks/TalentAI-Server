@@ -12,7 +12,7 @@ async function getApp() {
     serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
   });
   await client.connect();
-  const db = client.db('TalentAI');
+  const db = client.db('HireMind');
   const app = createApp(db);
   app.set('trust proxy', 1);
   cachedApp = app;

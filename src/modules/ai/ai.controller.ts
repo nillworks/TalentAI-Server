@@ -24,7 +24,11 @@ export function createCoverLetterHandler() {
       const input = req.body as CoverLetterInput;
 
       if (!input.jobTitle || !input.company || !input.skills) {
-        return sendError(res, 'Job title, company name, and skills are required', 400);
+        return sendError(
+          res,
+          'Job title, company name, and skills are required',
+          400,
+        );
       }
 
       res.setHeader('Content-Type', 'text/event-stream');
@@ -36,7 +40,7 @@ export function createCoverLetterHandler() {
 
       await generateCoverLetterStream(
         input,
-        (chunk) => {
+        chunk => {
           fullText += chunk;
           res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
         },
@@ -44,13 +48,14 @@ export function createCoverLetterHandler() {
           res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
           res.end();
         },
-        (err) => {
+        err => {
           res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
           res.end();
         },
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate cover letter';
+      const message =
+        err instanceof Error ? err.message : 'Failed to generate cover letter';
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
         return res.end();
@@ -75,7 +80,7 @@ export function createRecommendationsHandler(
         .limit(50)
         .toArray();
 
-      const availableJobs: JobForRecommendation[] = allJobs.map((job) => ({
+      const availableJobs: JobForRecommendation[] = allJobs.map(job => ({
         _id: job._id.toString(),
         title: job.title,
         companyName: job.companyName,
@@ -98,7 +103,8 @@ export function createRecommendationsHandler(
         totalJobs: availableJobs.length,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to get recommendations';
+      const message =
+        err instanceof Error ? err.message : 'Failed to get recommendations';
       return sendError(res, message);
     }
   };
@@ -117,7 +123,10 @@ export function createResumeAnalyzeHandler(
       let resumeText = '';
 
       if (req.file) {
-        resumeText = await extractTextFromBuffer(req.file.buffer, req.file.mimetype);
+        resumeText = await extractTextFromBuffer(
+          req.file.buffer,
+          req.file.mimetype,
+        );
       } else if (req.body.resumeText) {
         resumeText = req.body.resumeText;
       } else {
@@ -128,11 +137,19 @@ export function createResumeAnalyzeHandler(
             resumeUrl: profile.resumeUrl,
           });
         }
-        return sendError(res, 'No resume provided. Upload a file or paste resume text.', 400);
+        return sendError(
+          res,
+          'No resume provided. Upload a file or paste resume text.',
+          400,
+        );
       }
 
       if (resumeText.trim().length < 50) {
-        return sendError(res, 'Resume content too short. Please provide a complete resume.', 400);
+        return sendError(
+          res,
+          'Resume content too short. Please provide a complete resume.',
+          400,
+        );
       }
 
       const analysis = await analyzeResumeText(resumeText);
@@ -142,7 +159,8 @@ export function createResumeAnalyzeHandler(
         wordCount: resumeText.split(/\s+/).length,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to analyze resume';
+      const message =
+        err instanceof Error ? err.message : 'Failed to analyze resume';
       return sendError(res, message);
     }
   };
@@ -169,37 +187,50 @@ export function createChatHandler(
         return sendError(res, 'Message is required', 400);
       }
 
-      const [history, totalJobs, jobCategories, userData, profile, plans] = await Promise.all([
-        chatCollection
-          .find({ userId, conversationId: conversationId || null })
-          .sort({ createdAt: 1 })
-          .limit(50)
-          .toArray(),
+      const [history, totalJobs, jobCategories, userData, profile, plans] =
+        await Promise.all([
+          chatCollection
+            .find({ userId, conversationId: conversationId || null })
+            .sort({ createdAt: 1 })
+            .limit(50)
+            .toArray(),
 
-        jobCollection.countDocuments({ status: 'approved' }),
+          jobCollection.countDocuments({ status: 'approved' }),
 
-        jobCollection.aggregate([
-          { $match: { status: 'approved' } },
-          { $group: { _id: '$category' } },
-          { $sort: { _id: 1 } },
-        ]).toArray().then((cats) => cats.map((c) => c._id)),
+          jobCollection
+            .aggregate([
+              { $match: { status: 'approved' } },
+              { $group: { _id: '$category' } },
+              { $sort: { _id: 1 } },
+            ])
+            .toArray()
+            .then(cats => cats.map(c => c._id)),
 
-        userCollection.findOne({ _id: new ObjectId(userId) }),
+          userCollection.findOne({ _id: new ObjectId(userId) }),
 
-        seekerProfileCollection.findOne({ userId }),
+          seekerProfileCollection.findOne({ userId }),
 
-        plansCollection.find().sort({ price: 1 }).toArray(),
-      ]);
+          plansCollection.find().sort({ price: 1 }).toArray(),
+        ]);
 
       const [appliedCount, savedCount] = await Promise.all([
         applicationCollection.countDocuments({ userId }),
         savedJobCollection.countDocuments({ userId }),
       ]);
 
-      const websiteContext = buildWebsiteContext(totalJobs, jobCategories, plans);
-      const userContext = buildUserContext(userData, profile, appliedCount, savedCount);
+      const websiteContext = buildWebsiteContext(
+        totalJobs,
+        jobCategories,
+        plans,
+      );
+      const userContext = buildUserContext(
+        userData,
+        profile,
+        appliedCount,
+        savedCount,
+      );
 
-      const messages: ChatMessage[] = history.map((h) => ({
+      const messages: ChatMessage[] = history.map(h => ({
         role: h.role as 'user' | 'model',
         text: h.text,
       }));
@@ -224,7 +255,7 @@ export function createChatHandler(
         messages,
         websiteContext,
         userContext,
-        (chunk) => {
+        chunk => {
           fullResponse += chunk;
           res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
         },
@@ -236,16 +267,19 @@ export function createChatHandler(
             text: fullResponse,
             createdAt: new Date(),
           });
-          res.write(`data: ${JSON.stringify({ done: true, conversationId: conversationId || null })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({ done: true, conversationId: conversationId || null })}\n\n`,
+          );
           res.end();
         },
-        (err) => {
+        err => {
           res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
           res.end();
         },
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to process chat';
+      const message =
+        err instanceof Error ? err.message : 'Failed to process chat';
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
         return res.end();
@@ -255,10 +289,19 @@ export function createChatHandler(
   };
 }
 
-function buildWebsiteContext(totalJobs: number, categories: string[], plans: Document[]): string {
-  const planSummary = plans.map((p) => `- ${p.name}: $${p.price}/${p.interval || 'month'} - ${p.description || ''}`).join('\n');
-  return `=== TALENTAI WEBSITE CONTEXT ===
-TalentAI is an AI-powered job board and career coaching platform.
+function buildWebsiteContext(
+  totalJobs: number,
+  categories: string[],
+  plans: Document[],
+): string {
+  const planSummary = plans
+    .map(
+      p =>
+        `- ${p.name}: $${p.price}/${p.interval || 'month'} - ${p.description || ''}`,
+    )
+    .join('\n');
+  return `=== HIREMIND WEBSITE CONTEXT ===
+HireMind is an AI-powered job board and career coaching platform.
 - Total available jobs: ${totalJobs}
 - Job categories: ${categories.join(', ') || 'Various'}
 - Plans & Pricing:
@@ -269,7 +312,12 @@ ${planSummary || '- Free plan available; Paid plans with more features'}
 - Recruiters: post jobs, manage applications, classify resumes with AI`;
 }
 
-function buildUserContext(user: Document | null, profile: Document | null, appliedCount: number, savedCount: number): string {
+function buildUserContext(
+  user: Document | null,
+  profile: Document | null,
+  appliedCount: number,
+  savedCount: number,
+): string {
   if (!user) return '';
   return `=== YOUR DATA ===
 Your name: ${user.name || 'Not set'}
@@ -300,7 +348,8 @@ export function createChatHistoryHandler(chatCollection: Collection<Document>) {
 
       return sendSuccess(res, history);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch history';
+      const message =
+        err instanceof Error ? err.message : 'Failed to fetch history';
       return sendError(res, message);
     }
   };
@@ -315,7 +364,8 @@ export function createChatClearHandler(chatCollection: Collection<Document>) {
       await chatCollection.deleteMany({ userId });
       return sendSuccess(res, { message: 'Chat history cleared' });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to clear history';
+      const message =
+        err instanceof Error ? err.message : 'Failed to clear history';
       return sendError(res, message);
     }
   };
@@ -331,15 +381,25 @@ export function createResumeClassifierHandler(
       const { jobTitle, jobRequirements, candidates } = req.body;
 
       if (!jobTitle || !jobRequirements || !Array.isArray(jobRequirements)) {
-        return sendError(res, 'Job title and requirements array are required', 400);
+        return sendError(
+          res,
+          'Job title and requirements array are required',
+          400,
+        );
       }
 
       let resumes: { userId: string; resumeText: string }[];
 
       if (candidates && Array.isArray(candidates) && candidates.length > 0) {
-        resumes = candidates.filter((c: any) => c.resumeText?.trim().length >= 20);
+        resumes = candidates.filter(
+          (c: any) => c.resumeText?.trim().length >= 20,
+        );
         if (resumes.length === 0) {
-          return sendError(res, 'Provide at least one candidate with meaningful resume text (min 20 chars)', 400);
+          return sendError(
+            res,
+            'Provide at least one candidate with meaningful resume text (min 20 chars)',
+            400,
+          );
         }
       } else {
         const profiles = await seekerProfileCollection
@@ -348,8 +408,8 @@ export function createResumeClassifierHandler(
           .toArray();
 
         resumes = profiles
-          .filter((p) => p.resumeUrl)
-          .map((p) => ({
+          .filter(p => p.resumeUrl)
+          .map(p => ({
             userId: p.userId,
             resumeText: p.resumeUrl || '',
           }));
@@ -359,11 +419,19 @@ export function createResumeClassifierHandler(
         return sendSuccess(res, { classifications: [], totalProfiles: 0 });
       }
 
-      const classifications = await classifyResumes(jobTitle, jobRequirements, resumes);
+      const classifications = await classifyResumes(
+        jobTitle,
+        jobRequirements,
+        resumes,
+      );
 
-      return sendSuccess(res, { classifications, totalProfiles: resumes.length });
+      return sendSuccess(res, {
+        classifications,
+        totalProfiles: resumes.length,
+      });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to classify resumes';
+      const message =
+        err instanceof Error ? err.message : 'Failed to classify resumes';
       return sendError(res, message);
     }
   };
@@ -382,14 +450,19 @@ export function createGenerateJobPostHandler() {
 
       const wordCount = description.trim().split(/\s+/).length;
       if (wordCount < 20) {
-        return sendError(res, `Description must be at least 20 words (you wrote ${wordCount})`, 400);
+        return sendError(
+          res,
+          `Description must be at least 20 words (you wrote ${wordCount})`,
+          400,
+        );
       }
 
       const result = await generateJobPostFromDescription(description);
 
       return sendSuccess(res, result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate job post';
+      const message =
+        err instanceof Error ? err.message : 'Failed to generate job post';
       return sendError(res, message);
     }
   };

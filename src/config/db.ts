@@ -17,7 +17,7 @@ export const connectDB = async (): Promise<Db> => {
     });
 
     await client.connect();
-    db = client.db('TalentAI');
+    db = client.db('HireMind');
     console.log(`[DB]: MongoDB connected → ${db.databaseName}`);
     return db;
   } catch (error) {

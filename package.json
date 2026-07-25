@@ -1,7 +1,7 @@
 {
-  "name": "talentai-backend",
+  "name": "hiremind-backend",
   "version": "1.0.0",
-  "description": "TalentAI Backend Server",
+  "description": "HireMind Backend Server",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {

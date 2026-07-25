@@ -59,7 +59,7 @@ export function createApp(db: Db) {
   app.use('/api/ai', aiLimiter);
 
   app.get('/', (_req: Request, res: Response) => {
-    res.json({ success: true, message: 'TalentAI backend is running' });
+    res.json({ success: true, message: 'HireMind backend is running' });
   });
 
   const userCollection = db.collection('user');
