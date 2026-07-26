@@ -7,7 +7,6 @@
   "scripts": {
     "server": "nodemon --exec tsx src/server.ts",
     "build": "tsc",
-    "build:bundle": "esbuild api/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=api/index.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --external:mongodb --external:stripe --external:jose --external:@google/generative-ai --external:mammoth --external:pdf2json",
     "start": "node dist/server.js"
   },
   "dependencies": {
