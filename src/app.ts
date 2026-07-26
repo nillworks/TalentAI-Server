@@ -17,6 +17,7 @@ import { createAIRoutes } from './modules/ai/ai.route';
 import { createSeekerProfileRoutes } from './modules/seeker-profile/seekerProfile.route';
 import { createRecruiterProfileRoutes } from './modules/recruiter-profile/recruiterProfile.route';
 import { createPaymentRoutes } from './modules/payments/payment.route';
+import { createDashboardSearchRoutes } from './modules/dashboard-search/dashboardSearch.route';
 import { Db } from 'mongodb';
 import { setUserCollection } from './middlewares/auth.middleware';
 
@@ -87,6 +88,7 @@ export function createApp(db: Db) {
   app.use('/api/seeker', createSeekerProfileRoutes(seekerProfileCollection));
   app.use('/api/recruiter-profile', createRecruiterProfileRoutes(recruiterProfileCollection));
   app.use('/api/payments', createPaymentRoutes(userCollection, applicationCollection, jobCollection, plansCollection, subscriptionsCollection));
+  app.use('/api/dashboard/search', createDashboardSearchRoutes(jobCollection, userCollection, applicationCollection, seekerProfileCollection, recruiterProfileCollection, recruiterRequestCollection, blogCollection, plansCollection));
 
   app.use(globalErrorHandler);
 

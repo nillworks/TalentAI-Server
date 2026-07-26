@@ -104,6 +104,7 @@ export function createAdminRoutes(
         page = '1',
         limit = '10',
         status,
+        search,
       } = req.query as Record<string, string>;
 
       const pageNum = Number(page);
@@ -112,6 +113,15 @@ export function createAdminRoutes(
       const query: Record<string, any> = {};
       if (status && status !== 'all') {
         query.status = status;
+      }
+      if (search) {
+        const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.$or = [
+          { title: { $regex: new RegExp(escaped, 'i') } },
+          { companyName: { $regex: new RegExp(escaped, 'i') } },
+          { category: { $regex: new RegExp(escaped, 'i') } },
+          { recruiterName: { $regex: new RegExp(escaped, 'i') } },
+        ];
       }
 
       const skip = (pageNum - 1) * limitNum;
