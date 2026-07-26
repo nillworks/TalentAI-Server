@@ -282,5 +282,48 @@ export function createRecruiterRoutes(
     }
   });
 
+  router.get('/analytics/recent-applications', verifyToken, requireRole('recruiter', 'admin'), async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.sub;
+      const limit = Math.min(parseInt(req.query.limit as string) || 3, 20);
+
+      const jobIds = await jobCollection
+        .find({ postedBy: userId })
+        .project({ _id: 1 })
+        .toArray();
+
+      const ids = jobIds.map((j) => j._id.toString());
+
+      if (ids.length === 0) return sendSuccess(res, []);
+
+      const applications = await applicationCollection
+        .find({ jobId: { $in: ids } })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const enriched = await Promise.all(
+        applications.map(async (app) => {
+          const job = await jobCollection.findOne(
+            { _id: new ObjectId(app.jobId) },
+            { projection: { title: 1, companyName: 1 } },
+          );
+          let user = null;
+          if (app.userId && ObjectId.isValid(app.userId)) {
+            user = await userCollection.findOne(
+              { _id: new ObjectId(app.userId) },
+              { projection: { name: 1, email: 1, image: 1 } },
+            );
+          }
+          return { ...app, jobTitle: job?.title || '', companyName: job?.companyName || '', user };
+        }),
+      );
+
+      sendSuccess(res, enriched);
+    } catch {
+      sendError(res, 'Failed to fetch recent applications');
+    }
+  });
+
   return router;
 }
