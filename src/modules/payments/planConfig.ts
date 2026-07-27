@@ -1,4 +1,4 @@
-import { PlanType, PlanLimits } from '../../types/express.d';
+import { PlanType, PlanLimits } from '../../types/express.d.js';
 
 export interface PlanConfig {
   id: PlanType;

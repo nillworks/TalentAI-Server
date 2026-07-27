@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
 import { Collection, Document } from 'mongodb';
-import { AuthRequest } from '../../types/express.d';
-import { verifyToken } from '../../middlewares/auth.middleware';
-import { sendSuccess, sendError } from '../../utils/response';
+import { AuthRequest } from '../../types/express.d.js';
+import { verifyToken } from '../../middlewares/auth.middleware.js';
+import { sendSuccess, sendError } from '../../utils/response.js';
 
 const escapeRegex = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

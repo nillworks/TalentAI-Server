@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { AuthRequest } from '../types/express.d';
-import { sendError } from '../utils/response';
+import { AuthRequest } from '../types/express.d.js';
+import { sendError } from '../utils/response.js';
 import { ObjectId, Collection, Document } from 'mongodb';
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;

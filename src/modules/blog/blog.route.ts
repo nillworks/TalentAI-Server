@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
 import { ObjectId, Collection, Document } from 'mongodb';
-import { AuthRequest } from '../../types/express.d';
-import { verifyToken } from '../../middlewares/auth.middleware';
-import { sendSuccess, sendError } from '../../utils/response';
+import { AuthRequest } from '../../types/express.d.js';
+import { verifyToken } from '../../middlewares/auth.middleware.js';
+import { sendSuccess, sendError } from '../../utils/response.js';
 
 export function createBlogRoutes(
   blogCollection: Collection<Document>,

@@ -1,9 +1,9 @@
 import { Router, Response } from 'express';
 import { ObjectId, Collection, Document } from 'mongodb';
-import { AuthRequest } from '../../types/express.d';
-import { verifyToken, requireRole } from '../../middlewares/auth.middleware';
-import { sendSuccess, sendError, sendPaginated } from '../../utils/response';
-import { PLANS } from '../payments/planConfig';
+import { AuthRequest } from '../../types/express.d.js';
+import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js';
+import { sendSuccess, sendError, sendPaginated } from '../../utils/response.js';
+import { PLANS } from '../payments/planConfig.js';
 
 export function createAdminRoutes(
   userCollection: Collection<Document>,

@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { Collection, Document, ObjectId } from 'mongodb';
-import { AuthRequest } from '../../types/express.d';
-import { verifyToken } from '../../middlewares/auth.middleware';
-import { sendSuccess, sendError } from '../../utils/response';
-import { getStripe, isStripeConfigured } from './stripe';
-import { PLANS } from './planConfig';
-import { PlanType } from '../../types/express.d';
+import { AuthRequest } from '../../types/express.d.js';
+import { verifyToken } from '../../middlewares/auth.middleware.js';
+import { sendSuccess, sendError } from '../../utils/response.js';
+import { getStripe, isStripeConfigured } from './stripe.js';
+import { PLANS } from './planConfig.js';
+import { PlanType } from '../../types/express.d.js';
 
 export function createPaymentRoutes(
   userCollection: Collection<Document>,

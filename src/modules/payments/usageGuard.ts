@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { Collection, Document } from 'mongodb';
-import { AuthRequest } from '../../types/express.d';
-import { sendError } from '../../utils/response';
+import { AuthRequest } from '../../types/express.d.js';
+import { sendError } from '../../utils/response.js';
 
 export const checkApplicationLimit = (
   applicationCollection: Collection<Document>,

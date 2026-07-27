@@ -1,6 +1,6 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../types/express.d';
-import { sendSuccess, sendError } from '../../utils/response';
+import { AuthRequest } from '../../types/express.d.js';
+import { sendSuccess, sendError } from '../../utils/response.js';
 import { Collection, Document, ObjectId } from 'mongodb';
 import {
   generateCoverLetterStream,
@@ -14,7 +14,7 @@ import {
   RecommendationInput,
   JobForRecommendation,
   ChatMessage,
-} from './ai.service';
+} from './ai.service.js';
 
 // ==================== Cover Letter Generator ====================
 

@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { Collection, Document } from 'mongodb';
-import { AuthRequest } from '../../types/express.d';
-import { verifyToken } from '../../middlewares/auth.middleware';
-import { sendError } from '../../utils/response';
+import { AuthRequest } from '../../types/express.d.js';
+import { verifyToken } from '../../middlewares/auth.middleware.js';
+import { sendError } from '../../utils/response.js';
 import multer from 'multer';
 import {
   createCoverLetterHandler,
@@ -13,7 +13,7 @@ import {
   createChatClearHandler,
   createResumeClassifierHandler,
   createGenerateJobPostHandler,
-} from './ai.controller';
+} from './ai.controller.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
