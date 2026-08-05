@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { Collection, Document } from 'mongodb';
 import { AuthRequest } from '../../types/express.d.js';
-import { verifyToken } from '../../middlewares/auth.middleware.js';
+import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js';
 import { sendError } from '../../utils/response.js';
 import multer from 'multer';
 import {
@@ -41,7 +41,7 @@ export function createAIRoutes(
 
   router.delete('/chat/history', verifyToken, createChatClearHandler(chatCollection));
 
-  router.post('/classify-resumes', verifyToken, createResumeClassifierHandler(seekerProfileCollection));
+  router.post('/classify-resumes', verifyToken, requireRole('recruiter', 'admin'), createResumeClassifierHandler(seekerProfileCollection));
 
   router.post('/generate-job-post', verifyToken, createGenerateJobPostHandler());
 

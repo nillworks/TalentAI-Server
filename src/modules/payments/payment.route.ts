@@ -170,12 +170,44 @@ export function createPaymentRoutes(
         return sendError(res, 'Invalid session metadata', 400);
       }
 
+      if (session.metadata?.userId !== userId) {
+        return sendError(res, 'This payment belongs to another account', 403);
+      }
+
       const user = await userCollection.findOne({ _id: new ObjectId(userId) });
       if (!user) return sendError(res, 'User not found', 404);
 
       const now = new Date();
 
-      // 1. Update user plan
+      // Claim the session atomically so a replayed sessionId cannot grant the
+      // plan twice, even under concurrent requests.
+      const claim = await subscriptionsCollection.updateOne(
+        { stripeSessionId: session.id },
+        {
+          $setOnInsert: {
+            userId,
+            email: user.email,
+            name: user.name,
+            planId,
+            planName: session.metadata?.planName || planId,
+            stripeSessionId: session.id,
+            stripeSubscriptionId: stripeSubscriptionId || null,
+            stripeCustomerId: session.customer || null,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            currency: session.currency || 'usd',
+            status: 'active',
+            paymentStatus: session.payment_status,
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+        { upsert: true },
+      );
+
+      if (claim.upsertedCount === 0) {
+        return sendError(res, 'This payment has already been processed', 409);
+      }
+
       await userCollection.updateOne(
         { _id: new ObjectId(userId) },
         {
@@ -186,26 +218,6 @@ export function createPaymentRoutes(
           },
         },
       );
-
-      // 2. Save subscription record in subscriptions collection
-      const subscriptionDoc = {
-        userId,
-        email: user.email,
-        name: user.name,
-        planId,
-        planName: session.metadata?.planName || planId,
-        stripeSessionId: session.id,
-        stripeSubscriptionId: stripeSubscriptionId || null,
-        stripeCustomerId: session.customer || null,
-        amount: session.amount_total ? session.amount_total / 100 : 0,
-        currency: session.currency || 'usd',
-        status: 'active',
-        paymentStatus: session.payment_status,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await subscriptionsCollection.insertOne(subscriptionDoc);
 
       sendSuccess(res, { message: 'Plan updated and subscription saved', planId });
     } catch (err: any) {

@@ -413,17 +413,11 @@ export function createResumeClassifierHandler(
           );
         }
       } else {
-        const profiles = await seekerProfileCollection
-          .find({ resumeUrl: { $exists: true, $ne: '' } })
-          .limit(50)
-          .toArray();
-
-        resumes = profiles
-          .filter(p => p.resumeUrl)
-          .map(p => ({
-            userId: p.userId,
-            resumeText: p.resumeUrl || '',
-          }));
+        return sendError(
+          res,
+          'A candidates array is required',
+          400,
+        );
       }
 
       if (resumes.length === 0) {

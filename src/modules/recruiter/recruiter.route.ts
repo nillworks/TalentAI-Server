@@ -60,7 +60,7 @@ export function createRecruiterRoutes(
       const {
         title, companyName, companyLogo, category, jobType, location,
         salaryMin, salaryMax, deadline, shortDescription, fullDescription,
-        requirements, benefits, recruiterId, recruiterName, recruiterImage, recruiterEmail,
+        requirements, benefits, recruiterName, recruiterImage,
       } = req.body;
 
       if (!title || !companyName || !category || !jobType || !location) {
@@ -82,10 +82,10 @@ export function createRecruiterRoutes(
         requirements: requirements || [],
         benefits: benefits || [],
         postedBy: userId,
-        recruiterId: recruiterId || userId,
+        recruiterId: userId,
         recruiterName: recruiterName || req.user?.name || '',
         recruiterImage: recruiterImage || '',
-        recruiterEmail: recruiterEmail || req.user?.email || '',
+        recruiterEmail: req.user?.email || '',
         status: 'pending' as const,
         applicationCount: 0,
         createdAt: new Date(),
@@ -144,9 +144,24 @@ export function createRecruiterRoutes(
         return sendError(res, 'Invalid job ID', 400);
       }
 
-      const updateData = req.body;
-      delete updateData._id;
-      delete updateData.id;
+      const EDITABLE_JOB_FIELDS = [
+        'title', 'companyName', 'companyLogo', 'category', 'jobType', 'location',
+        'salaryMin', 'salaryMax', 'deadline', 'shortDescription', 'fullDescription',
+        'requirements', 'benefits',
+      ] as const;
+
+      const updateData: Record<string, unknown> = {};
+      for (const field of EDITABLE_JOB_FIELDS) {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field];
+        }
+      }
+      if (updateData.salaryMin !== undefined) {
+        updateData.salaryMin = Number(updateData.salaryMin) || 0;
+      }
+      if (updateData.salaryMax !== undefined) {
+        updateData.salaryMax = Number(updateData.salaryMax) || 0;
+      }
       updateData.updatedAt = new Date();
 
       const result = await jobCollection.updateOne(
@@ -190,10 +205,19 @@ export function createRecruiterRoutes(
 
   router.get('/jobs/:jobId/applicants', verifyToken, requireRole('recruiter', 'admin'), async (req: AuthRequest, res: Response) => {
     try {
+      const userId = req.user?.sub;
       const jobId = String(req.params.jobId);
 
       if (!ObjectId.isValid(jobId)) {
         return sendError(res, 'Invalid job ID', 400);
+      }
+
+      if (req.user?.role !== 'admin') {
+        const job = await jobCollection.findOne({
+          _id: new ObjectId(jobId),
+          postedBy: userId,
+        });
+        if (!job) return sendError(res, 'Job not found', 404);
       }
 
       const applicants = await applicationCollection
@@ -222,6 +246,7 @@ export function createRecruiterRoutes(
 
   router.patch('/applications/:appId/status', verifyToken, requireRole('recruiter', 'admin'), async (req: AuthRequest, res: Response) => {
     try {
+      const userId = req.user?.sub;
       const appId = String(req.params.appId);
       const { status, feedback } = req.body;
 
@@ -235,6 +260,22 @@ export function createRecruiterRoutes(
 
       if (status === 'rejected' && (!feedback || !feedback.trim())) {
         return sendError(res, 'Feedback is required when rejecting', 400);
+      }
+
+      const application = await applicationCollection.findOne({
+        _id: new ObjectId(appId),
+      });
+      if (!application) return sendError(res, 'Application not found', 404);
+
+      if (req.user?.role !== 'admin') {
+        if (!application.jobId || !ObjectId.isValid(String(application.jobId))) {
+          return sendError(res, 'Application not found', 404);
+        }
+        const job = await jobCollection.findOne({
+          _id: new ObjectId(String(application.jobId)),
+          postedBy: userId,
+        });
+        if (!job) return sendError(res, 'Application not found', 404);
       }
 
       const updateData: Record<string, unknown> = {
