@@ -5,6 +5,44 @@ import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js';
 import { sendSuccess, sendError, sendPaginated } from '../../utils/response.js';
 import { PLANS } from '../payments/planConfig.js';
 
+interface ProfileField {
+  label: string;
+  filled: boolean;
+}
+
+function calculateProfileScore(role: string, profile: Document | null): { score: number; breakdown: ProfileField[] } {
+  if (!profile) return { score: 0, breakdown: [] };
+
+  const fields: ProfileField[] = [];
+  if (role === 'recruiter') {
+    fields.push(
+      { label: 'Company Name', filled: !!profile.companyName },
+      { label: 'Company Logo', filled: !!profile.companyLogo },
+      { label: 'Company Website', filled: !!profile.companyWebsite },
+      { label: 'Company Description', filled: !!profile.companyDescription },
+      { label: 'Company Location', filled: !!profile.companyLocation },
+      { label: 'Industry', filled: !!profile.industry },
+      { label: 'Company Size', filled: !!profile.companySize },
+      { label: 'Phone', filled: !!profile.phone },
+    );
+  } else {
+    fields.push(
+      { label: 'Phone', filled: !!profile.phone },
+      { label: 'Bio', filled: !!profile.bio },
+      { label: 'Location', filled: !!profile.location },
+      { label: 'Resume', filled: !!profile.resumeUrl },
+      { label: 'LinkedIn', filled: !!profile.linkedinUrl },
+      { label: 'Skills', filled: (profile.skills?.length ?? 0) > 0 },
+      { label: 'Education', filled: (profile.education?.length ?? 0) > 0 },
+      { label: 'Experience', filled: (profile.experience?.length ?? 0) > 0 },
+    );
+  }
+
+  const filledCount = fields.filter((f) => f.filled).length;
+  const score = Math.round((filledCount / fields.length) * 100);
+  return { score, breakdown: fields };
+}
+
 export function createAdminRoutes(
   userCollection: Collection<Document>,
   jobCollection: Collection<Document>,
@@ -12,6 +50,8 @@ export function createAdminRoutes(
   recruiterRequestCollection: Collection<Document>,
   blogCollection: Collection<Document>,
   plansCollection: Collection<Document>,
+  seekerProfileCollection: Collection<Document>,
+  recruiterProfileCollection: Collection<Document>,
 ) {
   const router = Router();
 
@@ -37,7 +77,26 @@ export function createAdminRoutes(
       const skip = (pageNum - 1) * limitNum;
       const users = await userCollection.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum).toArray();
       const total = await userCollection.countDocuments(query);
-      sendPaginated(res, users, total, pageNum, limitNum);
+
+      const userIds = users.map((u) => String(u._id));
+      const [seekerProfiles, recruiterProfiles] = await Promise.all([
+        userIds.length
+          ? seekerProfileCollection.find({ userId: { $in: userIds } }).toArray()
+          : Promise.resolve([]),
+        userIds.length
+          ? recruiterProfileCollection.find({ userId: { $in: userIds } }).toArray()
+          : Promise.resolve([]),
+      ]);
+      const profileByUser = new Map<string, Document>();
+      seekerProfiles.forEach((p) => profileByUser.set(String(p.userId), p));
+      recruiterProfiles.forEach((p) => profileByUser.set(String(p.userId), p));
+
+      const enriched = users.map((u) => {
+        const role = u.role === 'recruiter' ? 'recruiter' : 'seeker';
+        const { score } = calculateProfileScore(role, profileByUser.get(String(u._id)) || null);
+        return { ...u, profileScore: score };
+      });
+      sendPaginated(res, enriched, total, pageNum, limitNum);
     } catch {
       sendError(res, 'Failed to fetch users');
     }
@@ -81,6 +140,31 @@ export function createAdminRoutes(
       sendSuccess(res, { message: 'Role updated' });
     } catch {
       sendError(res, 'Failed to update role');
+    }
+  });
+
+  router.get('/users/:id/profile-score', verifyToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+      const id = String(req.params.id);
+      if (!ObjectId.isValid(id)) return sendError(res, 'Invalid user ID', 400);
+
+      const user = await userCollection.findOne({ _id: new ObjectId(id) });
+      if (!user) return sendError(res, 'User not found', 404);
+
+      const role = user.role === 'recruiter' ? 'recruiter' : 'seeker';
+      const profileCollection = user.role === 'recruiter' ? recruiterProfileCollection : seekerProfileCollection;
+      const profile = await profileCollection.findOne({ userId: id });
+
+      const { score, breakdown } = calculateProfileScore(role, profile);
+      sendSuccess(res, {
+        userId: id,
+        role,
+        hasProfile: !!profile,
+        score,
+        breakdown,
+      });
+    } catch {
+      sendError(res, 'Failed to fetch profile score');
     }
   });
 

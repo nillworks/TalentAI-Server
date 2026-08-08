@@ -82,7 +82,7 @@ export function createApp(db: Db) {
   app.use('/api/saved-jobs', createSavedJobRoutes(savedJobCollection));
   app.use('/api/users', createUserRoutes(userCollection));
   app.use('/api/recruiter', createRecruiterRoutes(jobCollection, applicationCollection, recruiterRequestCollection, userCollection));
-  app.use('/api/admin', createAdminRoutes(userCollection, jobCollection, applicationCollection, recruiterRequestCollection, blogCollection, plansCollection));
+  app.use('/api/admin', createAdminRoutes(userCollection, jobCollection, applicationCollection, recruiterRequestCollection, blogCollection, plansCollection, seekerProfileCollection, recruiterProfileCollection));
   app.use('/api/blog', createBlogRoutes(blogCollection));
   app.use('/api/ai', createAIRoutes(jobCollection, seekerProfileCollection, chatCollection));
   app.use('/api/seeker', createSeekerProfileRoutes(seekerProfileCollection));
